@@ -1,0 +1,26 @@
+# config/alert_levels.yaml — 各级别默认路由 (设计 §6.2)
+# 这份是默认值, 可被 notification_routing.yaml 按 verdict.code 细化覆盖.
+
+version: 2
+
+level_routing_defaults:
+  emergency:
+    channels: [panel, webhook, dingtalk]
+    dingtalk_repeat:           2
+    dingtalk_repeat_interval_s: 30
+    dingtalk_at_all:           true
+  block:
+    channels: [panel, webhook, dingtalk]
+  return:
+    channels: [panel, webhook, dingtalk]
+  warn:
+    channels: [panel, webhook]            # DingTalk 默认关
+  info:
+    channels: [panel]                      # 仅面板
+
+# AlertCoordinator cooldown / 合并参数 (设计 §6.3 / §6.4)
+coordinator:
+  default_cooldown_ms:           30000
+  emergency_floor_cooldown_ms:   2000    # 防 ADS-B 洪流, 见 §6.3
+  dedup_window_ms:               60000
+  dedup_burst_threshold:         10      # >=10 次/60s → 合并 summary

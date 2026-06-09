@@ -1,0 +1,14 @@
+# config/notification_routing.yaml — 按 verdict.code 细化路由 (设计 §15.4)
+# 这份完全可选, 整份留空亦可: overrides: {}
+
+version: 1
+
+overrides:
+  # 示例: 噪声告警仅面板, 不打扰钉钉
+  BATTERY_LOOP_HIGH:
+    channels: [panel]
+
+  # 示例: ADS-B 紧急冲突同时打两个钉钉群
+  # ADSB_CONFLICT_IMMINENT:
+  #   channels: [panel, webhook, dingtalk]
+  #   dingtalk_robots: [ops-primary, on-call-personal]

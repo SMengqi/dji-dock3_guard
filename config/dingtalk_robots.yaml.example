@@ -1,0 +1,19 @@
+# config/dingtalk_robots.yaml — 钉钉机器人 (设计 §7.6)
+# 在钉钉群"群设置→机器人→添加→自定义"创建,选"加签"安全模式.
+# 把 webhook URL 与加签密钥放进 .env, 此处只用 ${VAR} 占位.
+
+version: 1
+
+robots:
+  - id: ops-primary
+    webhook_url:        ${DINGTALK_BOT_WEBHOOK_PRIMARY}
+    secret:             ${DINGTALK_BOT_SECRET_PRIMARY}
+    min_severity:       RETURN
+    rate_limit_per_min: 18              # 钉钉官方上限 20/min, 留 2 条余量
+    repeat_emergency:   true             # EMERGENCY 重复 2 次 (间隔 30s)
+    at_all_on_emergency: true
+    at_mobiles_on_emergency: []          # 可填具体值守人手机号
+    code_filter:
+      include: ["*"]
+      exclude:
+        - BATTERY_LOOP_HIGH              # 噪声告警不打扰示例

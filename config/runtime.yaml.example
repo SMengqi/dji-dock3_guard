@@ -1,0 +1,64 @@
+# config/runtime.yaml — MQTT 连接 + 订阅清单 + 运行期参数
+# 对应设计 §15.1.
+# 复制为 runtime.yaml 后填入真实 dock_sn.
+
+schema_version: 1
+
+mqtt:
+  broker_url:  ${MQTT_BROKER_URL}        # ssl://broker.example.com:8883
+  username:    ${MQTT_USERNAME}
+  password:    ${MQTT_PASSWORD}
+  client_id_prefix: dock_guard            # 实际 = "<prefix>-<host>-<pid>"
+  tls:
+    enabled: true
+    ca_cert_path:   ""                    # 自签证书时填路径; 公共 CA 留空
+    verify_hostname: true
+  qos: 1
+  reconnect:
+    initial_delay_s: 1
+    max_delay_s:     60
+    factor:          2
+
+# 全局 topic 默认开关. 详见设计 §15.1.1
+topic_defaults:
+  # ── 机场上行 ──────────────────────────────────────────────
+  dock_osd:              true    # thing/product/{dock_sn}/osd            ~2Hz, 安全核心
+  dock_state:            true    # thing/product/{dock_sn}/state          低频配置
+  dock_events:           true    # thing/product/{dock_sn}/events         HMS/任务进度/ADS-B
+  dock_requests:         true    # thing/product/{dock_sn}/requests       低频
+  dock_requests_reply:   true    # thing/product/{dock_sn}/requests_reply
+  dock_services_reply:   true    # thing/product/{dock_sn}/services_reply 观测下行回执
+  dock_sys_status:       true    # sys/product/{dock_sn}/status           在线/离线
+
+  # ── 飞行器上行 ────────────────────────────────────────────
+  drone_osd:             true    # thing/product/{drone_sn}/osd           ~10Hz
+  drone_state:           true    # thing/product/{drone_sn}/state         低频
+  drone_state_reply:     false   # thing/product/{drone_sn}/state_reply   告警不需要
+  drone_events:          true    # thing/product/{drone_sn}/events        HMS/任务
+
+  # ── 高频源 (默认全关) ─────────────────────────────────────
+  dock_drc_up:           false   # thing/product/{dock_sn}/drc/up         ~34Hz
+  dock_drc_down:         false   # thing/product/{dock_sn}/drc/down       ~34Hz
+
+  # ── 观测下行通道 (默认关; 本服务永不发布) ────────────────────
+  dock_services:         false   # thing/product/{dock_sn}/services       仅观测,不发
+
+# 订阅哪些 dock
+subscriptions:
+  - dock_sn: REPLACE_WITH_REAL_DOCK_SN
+    enabled: true
+    # topics:   # 可选,不写=全部使用 topic_defaults
+    #   dock_drc_up: true        # 此 dock 例外打开
+
+# 全订阅模式 (仅开发/排查用,生产关)
+wildcard_subscribe:
+  enabled: false
+
+# Aggregator / RuleEngine 运行期参数
+runtime:
+  warming_up_ms:                  60000   # §4.6
+  bare_flight_threshold_ms:       5000    # §4.3
+  dock_osd_silence_to_offline_ms: 10000   # §4.7
+  drone_osd_silence_alert_ms:     5000    # §4.7
+  facts_ring_window_max_ms:       300000  # §5.2.1
+  snapshot_persist_interval_s:    30      # §4.6

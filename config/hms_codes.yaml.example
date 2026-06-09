@@ -1,0 +1,17 @@
+# config/hms_codes.yaml — DJI HMS 告警码字典 (设计 §11 TBD)
+# 实现期需从 DJI 文档 / 现场录制中收集,分类填入下面集合.
+# rules.yaml 通过 value_ref 引用这些集合.
+
+version: 1
+
+# 水浸/进水相关 HMS code (设计 §5.3 preflight.water_immersion_hms 引用)
+hms_water_immersion_codes: []
+
+# 电池热失控/异常 HMS code
+hms_battery_critical_codes: []
+
+# 姿态/飞控严重异常 HMS code
+hms_fatal_codes: []
+
+# 通信链路相关 HMS code
+hms_comm_codes: []

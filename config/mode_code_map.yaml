@@ -1,0 +1,45 @@
+# config/mode_code_map.yaml — 飞行器 mode_code 映射 (设计 §4.4)
+# 来源: DJI Cloud API M4D/M4TD Properties 官方表
+# https://developer.dji.com/doc/cloud-api-tutorial/en/api-reference/dock-to-cloud/mqtt/aircraft/m4d-properties.html
+
+drone_model: M4D
+firmware_min: null                 # 实现期填实际固件号
+
+values:
+  0:  STANDBY                       # Idle / 待机
+  1:  TAKEOFF_PREPARATION
+  2:  TAKEOFF_PREPARATION_COMPLETED
+  3:  MANUAL_FLIGHT                 # 手动飞行 (DRC 摇杆/裸飞典型值)
+  4:  AUTOMATIC_TAKEOFF
+  5:  WAYLINE_FLIGHT
+  6:  PANORAMIC_PHOTOGRAPHY
+  7:  INTELLIGENT_TRACKING
+  8:  ADS_B_AVOIDANCE
+  9:  AUTO_RTH
+  10: AUTO_LANDING
+  11: FORCED_LANDING
+  12: THREE_BLADE_LANDING           # 故障降落
+  13: UPGRADING
+  14: NOT_CONNECTED
+  15: APAS
+  16: VIRTUAL_STICK
+  17: LIVE_FLIGHT_CONTROLS          # DRC 完整路径
+  18: AIRBORNE_RTK_FIXING
+  19: DOCK_ADDRESS_SELECTING
+  20: POI
+  21: FAR_FROM_DOCK_WAYLINE         # CN 文档新增
+
+airborne_set: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 17, 18, 20, 21]
+
+phase_bucket:
+  PREFLIGHT: [0, 1, 2, 18, 19]
+  TAKEOFF:   [4]
+  CRUISE:    [3, 5, 6, 7, 15, 17, 20, 21]
+  AVOIDANCE: [8]
+  RTH:       [9]
+  LANDING:   [10, 11, 12]
+  OFFLINE:   [14]
+  UPGRADING: [13]
+  IDLE:      [16]
+
+unknown_policy: WARN_AND_TREAT_AS_AIRBORNE

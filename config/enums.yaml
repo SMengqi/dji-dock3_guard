@@ -1,0 +1,16 @@
+# config/enums.yaml — 业务有序枚举 (设计 §5.3)
+# 规则 yaml 里写 ENUM 名,引擎运行期映射到对应序号.
+
+version: 1
+
+# 雨量趋势 (派生 fact rainfall_trend_60s)
+rainfall_trend:
+  RECEDING:   -1
+  STABLE:     0
+  ESCALATING: 1
+
+# 数据健康趋势 (预留)
+data_freshness:
+  FRESH:  0
+  STALE:  1
+  MISSING: 2

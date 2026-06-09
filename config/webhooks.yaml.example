@@ -1,0 +1,19 @@
+# config/webhooks.yaml — 通用 webhook (设计 §7.5)
+# 对接外部运维平台 / 工单系统 / 数据湖.
+# 不需要时整份留空: endpoints: []
+
+version: 1
+
+endpoints:
+  - id: ops-platform
+    url:    https://ops.example.com/dji/alarms
+    secret: ${WEBHOOK_SECRET_OPS}        # HMAC-SHA256 密钥,环境变量
+    min_severity: RETURN
+    code_filter:
+      include: ["*"]
+      exclude:
+        - BATTERY_LOOP_HIGH
+    timeout_ms: 5000
+    retry:
+      max_attempts: 3
+      backoff_ms: [2000, 8000, 30000]
