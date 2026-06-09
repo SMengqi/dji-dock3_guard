@@ -1,0 +1,126 @@
+# config/rules.yaml — Phase 4 启动子集 (设计 §5.3)
+# 所有规则只产生告警, 任何 level 都不下发指令 (设计 §5.4).
+
+version: 2
+
+defaults:
+  cooldown_ms: 30000
+  dwell_enter_ms: 0
+  dwell_exit_ms: 0
+
+# ── 起飞前硬条件 ────────────────────────────────────────────────────
+preflight_block:
+  - id: preflight.wind_exceeded
+    desc: 起飞前阵风窗口峰值超 12 m/s
+    phase: [PREFLIGHT]
+    all:
+      - { fact: wind_gust_max_30s, op: ">", value: 12.0 }
+    verdict:
+      level: block
+      code: PREFLIGHT_WIND_EXCEEDED
+      suggested_action: reject_takeoff
+
+  - id: preflight.dock_tilt
+    desc: 起飞前机场倾角 > 3 度
+    phase: [PREFLIGHT]
+    all:
+      - { fact: tilt_angle_valid, op: "==", value: 1 }
+      - { fact: tilt_angle_value, op: ">", value: 3.0 }
+    verdict:
+      level: block
+      code: PREFLIGHT_DOCK_TILT
+      suggested_action: reject_takeoff
+
+  - id: preflight.rtk_not_fixed
+    desc: 起飞前 RTK 未收敛
+    phase: [PREFLIGHT]
+    all:
+      - { fact: rtk_fixed, op: "==", value: false }
+    verdict:
+      level: block
+      code: PREFLIGHT_RTK_NOT_FIXED
+      suggested_action: reject_takeoff
+
+  - id: preflight.cover_anomaly
+    desc: 起飞前舱门异常 (cover_state=3 Abnormal)
+    phase: [PREFLIGHT]
+    all:
+      - { fact: cover_state, op: "==", value: 3 }
+    verdict:
+      level: block
+      code: PREFLIGHT_COVER_ANOMALY
+      suggested_action: reject_takeoff
+
+  - id: preflight.emergency_stop_pressed
+    desc: 机场急停按钮按下
+    phase: [PREFLIGHT]
+    all:
+      - { fact: emergency_stop_pressed, op: "==", value: true }
+    verdict:
+      level: block
+      code: PREFLIGHT_EMERGENCY_STOP_PRESSED
+      suggested_action: reject_takeoff
+
+  - id: preflight.heavy_rain
+    desc: 起飞前重雨
+    phase: [PREFLIGHT]
+    all:
+      - { fact: rainfall, op: ">=", value: 3 }
+    verdict:
+      level: block
+      code: PREFLIGHT_HEAVY_RAIN
+      suggested_action: reject_takeoff
+
+# ── 飞行中环境恶化 ────────────────────────────────────────────────────
+inflight_escalate:
+  - id: inflight.wind_gust
+    desc: 飞行中阵风窗口峰值超 14 m/s 持续 3s
+    phase: [TAKEOFF, CRUISE, AVOIDANCE]
+    all:
+      - { fact: wind_gust_max_30s, op: ">", value: 14.0 }
+    dwell_enter_ms: 3000
+    verdict:
+      level: return
+      code: INFLIGHT_WIND_GUST
+      suggested_action: return_home
+
+  - id: inflight.battery_low
+    desc: 飞行中电量低于返航功率阈值
+    phase: [TAKEOFF, CRUISE, AVOIDANCE]
+    all:
+      - { fact: battery_capacity_percent, op: "<=", fact_ref: battery_return_home_power }
+    verdict:
+      level: return
+      code: INFLIGHT_BATTERY_LOW
+      suggested_action: return_home
+
+  - id: inflight.heavy_rain
+    desc: 飞行中重雨升级
+    phase: [TAKEOFF, CRUISE, AVOIDANCE]
+    all:
+      - { fact: rainfall, op: ">=", value: 3 }
+    verdict:
+      level: return
+      code: INFLIGHT_HEAVY_RAIN
+      suggested_action: return_home
+
+# ── 运维顾问 ─────────────────────────────────────────────────────────
+maintenance_advisory:
+  - id: maint.warming_up
+    desc: 系统冷启动 warming_up 期内 (info 提示)
+    all:
+      - { fact: warming_up, op: "==", value: true }
+    cooldown_ms: 86400000
+    verdict:
+      level: info
+      code: WARMING_UP
+      suggested_action: notify
+
+  - id: maint.dock_alarm
+    desc: 机场声光告警激活
+    all:
+      - { fact: dock_alarm_state, op: "==", value: 1 }
+    verdict:
+      level: warn
+      code: DOCK_AUDIO_VISUAL_ALARM
+      suggested_action: investigate
