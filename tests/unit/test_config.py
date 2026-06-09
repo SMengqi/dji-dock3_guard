@@ -1,0 +1,239 @@
+"""Phase 1 单元测试: config 加载与 ${VAR} 展开 (设计 §15.1 / §10.1)."""
+
+from __future__ import annotations
+
+import pathlib
+import textwrap
+
+import pytest
+from pydantic import ValidationError
+
+from dock_guard.config import (
+    AlertLevelsYaml,
+    DockSubscription,
+    MissingEnvVarError,
+    ModeCodeMapYaml,
+    TopicDefaults,
+    expand_env_vars,
+    load_alert_levels,
+    load_app_config,
+    load_enums,
+    load_mode_code_map,
+    load_runtime_yaml,
+)
+from dock_guard.types import TopicKey
+
+
+class TestExpandEnvVars:
+    def test_simple_expansion(self) -> None:
+        out = expand_env_vars("hello ${X}!", env={"X": "world"})
+        assert out == "hello world!"
+
+    def test_multiple_vars(self) -> None:
+        out = expand_env_vars("${A}_${B}", env={"A": "foo", "B": "bar"})
+        assert out == "foo_bar"
+
+    def test_missing_var_raises_with_name(self) -> None:
+        with pytest.raises(MissingEnvVarError) as exc:
+            expand_env_vars("hi ${MISSING}", env={})
+        assert exc.value.var_names == ["MISSING"]
+
+    def test_missing_multiple_dedup(self) -> None:
+        with pytest.raises(MissingEnvVarError) as exc:
+            expand_env_vars("${A} ${B} ${A} ${C}", env={"B": "ok"})
+        assert exc.value.var_names == ["A", "C"]
+
+    def test_no_placeholders_passthrough(self) -> None:
+        assert expand_env_vars("plain text", env={}) == "plain text"
+
+
+def _minimal_runtime_yaml(*, dock_sn: str = "TEST_DOCK_01") -> str:
+    return textwrap.dedent(f"""
+        schema_version: 1
+        mqtt:
+          broker_url:  ${{MQTT_BROKER_URL}}
+          username:    ${{MQTT_USERNAME}}
+          password:    ${{MQTT_PASSWORD}}
+        subscriptions:
+          - dock_sn: {dock_sn}
+            enabled: true
+    """)
+
+
+_GOOD_ENV = {
+    "MQTT_BROKER_URL": "ssl://broker.test:8883",
+    "MQTT_USERNAME": "test_user",
+    "MQTT_PASSWORD": "test_pass",
+}
+
+
+class TestLoadRuntimeYaml:
+    def test_happy_path(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "runtime.yaml"
+        path.write_text(_minimal_runtime_yaml())
+        cfg = load_runtime_yaml(path, env=_GOOD_ENV)
+        assert cfg.schema_version == 1
+        assert cfg.mqtt.broker_url == "ssl://broker.test:8883"
+        assert cfg.mqtt.username == "test_user"
+        assert cfg.mqtt.password == "test_pass"
+        assert len(cfg.subscriptions) == 1
+        assert cfg.subscriptions[0].dock_sn == "TEST_DOCK_01"
+
+    def test_defaults_topic_defaults(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "runtime.yaml"
+        path.write_text(_minimal_runtime_yaml())
+        cfg = load_runtime_yaml(path, env=_GOOD_ENV)
+        td = cfg.topic_defaults
+        assert td.dock_osd is True
+        assert td.dock_drc_up is False
+        assert td.dock_services is False
+        assert td.drone_state_reply is False
+
+    def test_missing_env_var_fails(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "runtime.yaml"
+        path.write_text(_minimal_runtime_yaml())
+        with pytest.raises(MissingEnvVarError) as exc:
+            load_runtime_yaml(path, env={})
+        assert "MQTT_BROKER_URL" in exc.value.var_names
+
+    def test_no_enabled_subscription_fails(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "runtime.yaml"
+        path.write_text(textwrap.dedent("""
+            schema_version: 1
+            mqtt:
+              broker_url:  url
+              username:    u
+              password:    p
+            subscriptions:
+              - dock_sn: SN1
+                enabled: false
+        """))
+        with pytest.raises(ValidationError, match="at least one subscription"):
+            load_runtime_yaml(path)
+
+    def test_unknown_topic_key_fails(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "runtime.yaml"
+        path.write_text(textwrap.dedent("""
+            schema_version: 1
+            mqtt:
+              broker_url:  ${MQTT_BROKER_URL}
+              username:    ${MQTT_USERNAME}
+              password:    ${MQTT_PASSWORD}
+            subscriptions:
+              - dock_sn: SN1
+                enabled: true
+                topics:
+                  nonexistent_topic: true
+        """))
+        with pytest.raises(ValidationError, match="unknown topic keys"):
+            load_runtime_yaml(path, env=_GOOD_ENV)
+
+    def test_wildcard_alone_is_valid(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "runtime.yaml"
+        path.write_text(textwrap.dedent("""
+            schema_version: 1
+            mqtt:
+              broker_url:  url
+              username:    u
+              password:    p
+            subscriptions: []
+            wildcard_subscribe:
+              enabled: true
+        """))
+        cfg = load_runtime_yaml(path)
+        assert cfg.wildcard_subscribe.enabled is True
+
+
+class TestDockSubscriptionOverride:
+    def test_effective_topics_merges(self) -> None:
+        defaults = TopicDefaults()
+        sub = DockSubscription(dock_sn="SN1", topics={"dock_drc_up": True})
+        eff = sub.effective_topics(defaults)
+        assert eff[TopicKey.DOCK_DRC_UP] is True
+        assert eff[TopicKey.DOCK_OSD] is True  # 其它保持默认
+
+    def test_effective_topics_no_override(self) -> None:
+        defaults = TopicDefaults()
+        sub = DockSubscription(dock_sn="SN1")
+        eff = sub.effective_topics(defaults)
+        assert eff == defaults.as_map()
+
+
+def test_real_mode_code_map_loads() -> None:
+    repo_config = pathlib.Path(__file__).resolve().parents[2] / "config" / "mode_code_map.yaml"
+    if not repo_config.exists():
+        pytest.skip(f"config not found: {repo_config}")
+    m = load_mode_code_map(repo_config)
+    assert m.drone_model == "M4D"
+    assert len(m.values) == 22  # 0..21
+    assert 9 in m.airborne_set
+    assert "PREFLIGHT" in m.phase_bucket
+
+
+def test_real_alert_levels_loads() -> None:
+    repo_config = pathlib.Path(__file__).resolve().parents[2] / "config" / "alert_levels.yaml"
+    if not repo_config.exists():
+        pytest.skip(f"config not found: {repo_config}")
+    al = load_alert_levels(repo_config)
+    assert al.version == 2
+    assert "emergency" in al.level_routing_defaults
+    assert al.coordinator.emergency_floor_cooldown_ms == 2000
+
+
+def test_real_enums_loads() -> None:
+    repo_config = pathlib.Path(__file__).resolve().parents[2] / "config" / "enums.yaml"
+    if not repo_config.exists():
+        pytest.skip(f"config not found: {repo_config}")
+    e = load_enums(repo_config)
+    assert e.rainfall_trend["ESCALATING"] == 1
+    assert e.rainfall_trend["RECEDING"] == -1
+
+
+class TestModeCodeMapValidation:
+    def test_phase_bucket_references_undefined_fails(self) -> None:
+        with pytest.raises(ValidationError, match="undefined mode_code"):
+            ModeCodeMapYaml.model_validate({
+                "drone_model": "M4D",
+                "values": {0: "STANDBY"},
+                "airborne_set": [],
+                "phase_bucket": {"CRUISE": [99]},
+                "unknown_policy": "WARN_AND_TREAT_AS_AIRBORNE",
+            })
+
+    def test_airborne_set_duplicates_fails(self) -> None:
+        with pytest.raises(ValidationError, match="unique"):
+            ModeCodeMapYaml.model_validate({
+                "drone_model": "M4D",
+                "values": {0: "A", 1: "B"},
+                "airborne_set": [0, 0, 1],
+                "phase_bucket": {},
+                "unknown_policy": "X",
+            })
+
+
+class TestAlertLevelsValidation:
+    def test_missing_severity_fails(self) -> None:
+        with pytest.raises(ValidationError, match="missing severities"):
+            AlertLevelsYaml.model_validate({
+                "version": 2,
+                "level_routing_defaults": {
+                    "emergency": {"channels": ["panel"]},
+                    "block": {"channels": ["panel"]},
+                },
+            })
+
+
+def test_load_app_config_with_repo_configs(tmp_path: pathlib.Path) -> None:
+    repo_config_dir = pathlib.Path(__file__).resolve().parents[2] / "config"
+    if not (repo_config_dir / "mode_code_map.yaml").exists():
+        pytest.skip("repo config dir not present")
+
+    for name in ("mode_code_map.yaml", "alert_levels.yaml", "enums.yaml"):
+        (tmp_path / name).symlink_to(repo_config_dir / name)
+    (tmp_path / "runtime.yaml").write_text(_minimal_runtime_yaml())
+
+    cfg = load_app_config(tmp_path, env=_GOOD_ENV, with_rules=False)
+    assert cfg.runtime.mqtt.broker_url == "ssl://broker.test:8883"
+    assert cfg.mode_code_map.drone_model == "M4D"
+    assert cfg.alert_levels.coordinator.emergency_floor_cooldown_ms == 2000
+    assert cfg.enums.rainfall_trend["ESCALATING"] == 1
