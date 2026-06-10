@@ -52,11 +52,12 @@ topic_defaults:
   # ── 观测下行通道 (默认关; 本服务永不发布) ────────────────────
   dock_services:         false   # thing/product/{dock_sn}/services       仅观测,不发
 
-# 订阅哪些 dock
+# 订阅哪些 dock. dock_sn 走 .env (MQTT_DOCK_SN) 以避免改 yaml.
+# 多 dock / per-dock topic 覆盖时再手填本文件 (Stage 3+ B 候选要做的).
 # 启动期 fail-fast: dock_sn 含 REPLACE / TODO / FIXME / <...> 占位会拒启,
 # 强制你填真实 SN, 防止悄悄订阅一个不存在的 topic.
 subscriptions:
-  - dock_sn: <your-dock-sn>             # sim 录制样本是 8UUXN7N00A0GAA
+  - dock_sn: ${MQTT_DOCK_SN}            # 在 .env 设置 (sim 录制样本: 8UUXN7N00A0GAA)
     enabled: true
     # topics:   # 可选,不写=全部使用 topic_defaults
     #   dock_drc_up: true        # 此 dock 例外打开
@@ -73,3 +74,4 @@ runtime:
   drone_osd_silence_alert_ms:     5000    # §4.7
   facts_ring_window_max_ms:       300000  # §5.2.1
   snapshot_persist_interval_s:    30      # §4.6
+  log_level:                      INFO    # DEBUG|INFO|WARN|ERROR; CLI --log-level 可临时覆盖

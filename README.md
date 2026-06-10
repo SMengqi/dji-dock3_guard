@@ -32,21 +32,30 @@ DJI 大疆机场 3 飞行安全评估与告警系统。
 ./install.sh
 source .venv/bin/activate
 
-# 2) 编辑 .env 的两段钉钉值 (line 15 webhook URL, line 16 SEC... 密钥)
+# 2) 改 .env 一处, runtime.yaml 一般不动:
+#    MQTT_BROKER_URL=tcp://localhost:1883   # sim; 真 broker 改 ssl://
+#    MQTT_USERNAME=x                         # sim 无 auth 填占位即可
+#    MQTT_PASSWORD=x
+#    MQTT_DOCK_SN=8UUXN7N00A0GAA             # 机场 SN, sim 录制样本是这个
+#    ADMIN_TOKEN=<python -c "import secrets; print(secrets.token_hex(32))" 的输出>
+#    DINGTALK_BOT_WEBHOOK_PRIMARY=https://oapi.dingtalk.com/robot/send?access_token=<你的token>
+#    DINGTALK_BOT_SECRET_PRIMARY=SEC<你的加签密钥>
 vi .env
 
-# 3) 改 config/runtime.yaml 的 subscriptions[0].dock_sn 为 8UUXN7N00A0GAA
-#    (sim 模式可顺手把 broker_url 改为 tcp://localhost:1883 + tls.enabled: false)
-vi config/runtime.yaml
-
-# 4) 离线回放验证 (后台启动, 不依赖 broker, 最快)
+# 3) 离线回放验证 (后台启动, 不依赖 broker, 最快)
 ./run.sh replay                      # 默认目录 + 倍速 0
 ./run.sh logs replay                 # 看进度
 
-# 5) 切实时模式 (sim broker 或真 broker, 由 .env 决定)
+# 4) 切实时模式 (sim broker 或真 broker, 由 .env 决定)
 ./run.sh live
 ./run.sh status                      # 看后台状态
 ./run.sh stop live                   # 优雅停止 (SIGTERM -> graceful)
+
+# 5) HTTP 控制面 (Stage 2)
+curl http://localhost:8081/healthz                                                   # 200 永远
+curl http://localhost:8081/readyz                                                    # 200 当 broker 通 + 收到首帧 OSD
+curl -H "Authorization: Bearer $(grep ^ADMIN_TOKEN .env | cut -d= -f2)" \
+     http://localhost:8081/docs                                                      # FastAPI Swagger
 ```
 
 `./run.sh help` 看全部命令。前台调试不走 `run.sh`，直接 `python -m dock_guard ...` 看 stdout。

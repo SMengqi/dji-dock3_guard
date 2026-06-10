@@ -90,8 +90,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="禁用 HTTP 控制面 (跳过 ADMIN_TOKEN 校验, /healthz 不可用)")
 
     p.add_argument("--log-level", choices=["DEBUG", "INFO", "WARN", "ERROR"],
-                   default="INFO",
-                   help="stdout 日志级别, 不影响 jsonl 文件")
+                   default=None,
+                   help="stdout 日志级别覆盖 (一次性排查用); 未传时用 runtime.yaml "
+                        "的 runtime.log_level (默认 INFO)")
 
     return p
 
@@ -126,17 +127,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # 把 --log-level 真接到 stdlib logging (此前定义了 CLI 参数但没用,
-    # 导致 MqttSource 的 'subscribed: <topic>' 等 INFO 日志被默默吞掉,
-    # 看上去 "连上 broker 但没动静"). uvicorn 的日志另由 uvicorn.Config 控制,
-    # 这里仅管 dock_guard 自家模块.
-    import logging
-    logging.basicConfig(
-        level=getattr(logging, args.log_level),
-        format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
     config_dir = _resolve_dir(args.config_dir, Path("/app/config"), Path("./config"))
     data_dir = _resolve_dir(args.data_dir, Path("/app/data"), Path("./data"))
 
@@ -156,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     print()
     print(f"  config_dir         = {config_dir}")
     print(f"  data_dir           = {data_dir}")
-    print(f"  log_level          = {args.log_level}")
+    print(f"  log_level          = {args.log_level or '(from runtime.yaml)'}")
     if args.replay:
         print(f"  mode               = REPLAY ({args.replay})")
         print(f"  replay_speed       = {args.replay_speed}")
@@ -178,6 +168,16 @@ def main(argv: list[str] | None = None) -> int:
     except MissingEnvVarError as e:
         print(f"config error: {e}", file=sys.stderr)
         return 2
+
+    # 配置加载完成后初始化 logging (放在 config 之后, 这样 yaml 的
+    # runtime.log_level 才能成为权威来源; --log-level CLI 仅作一次性 override).
+    import logging
+    effective_log_level = args.log_level or cfg.runtime.runtime.log_level
+    logging.basicConfig(
+        level=getattr(logging, effective_log_level),
+        format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
     print("config summary:")
     print(f"  runtime.schema_version       = {cfg.runtime.schema_version}")

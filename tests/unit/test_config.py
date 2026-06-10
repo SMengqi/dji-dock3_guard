@@ -267,6 +267,85 @@ def test_real_enums_loads() -> None:
     assert e.rainfall_trend["RECEDING"] == -1
 
 
+class TestRuntimeParamsLogLevel:
+    """log_level 字段位于 runtime.yaml 的 runtime: 段, CLI 仅作 override."""
+
+    def test_default_is_info(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "runtime.yaml"
+        path.write_text(_minimal_runtime_yaml())
+        cfg = load_runtime_yaml(path, env=_GOOD_ENV)
+        assert cfg.runtime.log_level == "INFO"
+
+    def test_explicit_debug_loads(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "runtime.yaml"
+        path.write_text(textwrap.dedent("""
+            schema_version: 1
+            mqtt:
+              broker_url:  url
+              username:    u
+              password:    p
+            subscriptions:
+              - dock_sn: REAL_SN
+                enabled: true
+            runtime:
+              log_level: DEBUG
+        """))
+        cfg = load_runtime_yaml(path)
+        assert cfg.runtime.log_level == "DEBUG"
+
+    def test_invalid_level_rejected(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "runtime.yaml"
+        path.write_text(textwrap.dedent("""
+            schema_version: 1
+            mqtt:
+              broker_url:  url
+              username:    u
+              password:    p
+            subscriptions:
+              - dock_sn: REAL_SN
+                enabled: true
+            runtime:
+              log_level: VERBOSE
+        """))
+        with pytest.raises(ValidationError):
+            load_runtime_yaml(path)
+
+
+class TestDockSnFromEnv:
+    """dock_sn 走 ${MQTT_DOCK_SN} 占位符, 让用户只改 .env."""
+
+    def test_dock_sn_expanded_from_env(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "runtime.yaml"
+        path.write_text(textwrap.dedent("""
+            schema_version: 1
+            mqtt:
+              broker_url:  url
+              username:    u
+              password:    p
+            subscriptions:
+              - dock_sn: ${MQTT_DOCK_SN}
+                enabled: true
+        """))
+        cfg = load_runtime_yaml(path, env={"MQTT_DOCK_SN": "8UUXN7N00A0GAA"})
+        assert cfg.subscriptions[0].dock_sn == "8UUXN7N00A0GAA"
+
+    def test_dock_sn_missing_env_fails(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "runtime.yaml"
+        path.write_text(textwrap.dedent("""
+            schema_version: 1
+            mqtt:
+              broker_url:  url
+              username:    u
+              password:    p
+            subscriptions:
+              - dock_sn: ${MQTT_DOCK_SN}
+                enabled: true
+        """))
+        with pytest.raises(MissingEnvVarError) as exc:
+            load_runtime_yaml(path, env={})
+        assert "MQTT_DOCK_SN" in exc.value.var_names
+
+
 class TestModeCodeMapValidation:
     def test_phase_bucket_references_undefined_fails(self) -> None:
         with pytest.raises(ValidationError, match="undefined mode_code"):

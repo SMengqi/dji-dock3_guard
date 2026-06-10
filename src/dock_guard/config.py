@@ -19,7 +19,7 @@ import pathlib
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -203,6 +203,8 @@ class RuntimeParams(_Strict):
     drone_osd_silence_alert_ms: int = Field(default=5000, ge=1000)
     facts_ring_window_max_ms: int = Field(default=300000, ge=1000)
     snapshot_persist_interval_s: int = Field(default=30, ge=1)
+    # stdout 日志级别. CLI --log-level 仍可临时覆盖 (用于排查).
+    log_level: Literal["DEBUG", "INFO", "WARN", "ERROR"] = "INFO"
 
 
 class RuntimeYaml(_Strict):
