@@ -12,7 +12,8 @@ mqtt:
   tls:
     enabled: true
     ca_cert_path:   ""                    # 自签证书时填路径; 公共 CA 留空
-    verify_hostname: true
+    verify_hostname: true                 # false 仅关闭主机名匹配, 证书链验证始终开;
+                                          # 自签场景请用 ca_cert_path 而非关验证
   qos: 1
   reconnect:
     initial_delay_s: 1

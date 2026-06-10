@@ -18,7 +18,7 @@ from dock_guard import __version__
 from dock_guard.aggregator import DockAggregator
 from dock_guard.config import AppConfig, MissingEnvVarError, load_app_config
 from dock_guard.coordinator import AlertCoordinator, Decision, JsonlAlertSink
-from dock_guard.ingest import ReplaySource
+from dock_guard.ingest import MqttSource, ReplaySource
 from dock_guard.rules import RuleEngine
 from dock_guard.types import Severity, TopicKey
 
@@ -129,11 +129,61 @@ def main(argv: list[str] | None = None) -> int:
           f"em_floor={cfg.alert_levels.coordinator.emergency_floor_cooldown_ms}ms")
     print()
 
-    # ── Phase 2/3: --replay 跑 ReplaySource + Aggregator ──────────
+    # ── Phase 2-6: --replay 跑 ReplaySource + Aggregator ──────────
     if args.replay:
         return asyncio.run(_run_replay(args.replay, speed=args.replay_speed, cfg=cfg))
 
-    print("Phase 4+ pending. See README.md.")
+    # ── Phase 7: LIVE = 订 MQTT broker ─────────────────────────────
+    return asyncio.run(_run_live(cfg))
+
+
+async def _run_live(cfg: AppConfig) -> int:
+    """Phase 7 LIVE 模式: 订真实 MQTT broker, 永远跑直到 Ctrl-C / SIGTERM."""
+    src = MqttSource(cfg)
+    enabled = [s.dock_sn for s in cfg.runtime.subscriptions if s.enabled]
+    print(f"live source: MQTT {cfg.runtime.mqtt.broker_url}")
+    print(f"  docks       = {enabled}")
+    print(f"  qos         = {cfg.runtime.mqtt.qos}")
+    print(f"  tls         = {cfg.runtime.mqtt.tls.enabled}")
+    print()
+    print("注: 本服务仅 SUBSCRIBE; 任何 PUBLISH 到 thing/+/services 都是缺陷 (设计 §0.2).")
+    print("Ctrl-C 停止.")
+    print()
+
+    # 当前 phase 7 暂只支持单 dock + 单 drone; 多 dock 留待 Phase 9.
+    if len(enabled) != 1:
+        print(f"warning: phase 7 仅支持 1 个启用的 dock, 检测到 {len(enabled)}", file=sys.stderr)
+        return 2
+    dock_sn = enabled[0]
+
+    agg = DockAggregator(dock_sn, cfg)
+    engine = RuleEngine(cfg.rules, agg) if cfg.rules is not None else None
+    coordinator: AlertCoordinator | None = None
+    if engine is not None:
+        alerts_path = Path("data") / "alerts.jsonl"
+        coordinator = AlertCoordinator(cfg, sink=JsonlAlertSink(alerts_path))
+
+    total = 0
+    last_print_ts = 0
+    try:
+        async for env in src:
+            total += 1
+            agg.apply(env)
+            if engine is not None and coordinator is not None:
+                batch = engine.evaluate()
+                if batch:
+                    coordinator.handle_batch(batch)
+            # 每 1000 条心跳一次
+            if total - last_print_ts >= 1000:
+                print(f"  ... {total} envelopes processed, "
+                      f"phase={agg.current_phase.value}")
+                last_print_ts = total
+    except KeyboardInterrupt:
+        print("\nshutdown requested (Ctrl-C)")
+    finally:
+        if coordinator is not None:
+            coordinator.close()
+        await src.close()
     return 0
 
 
