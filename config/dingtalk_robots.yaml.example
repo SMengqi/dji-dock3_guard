@@ -1,6 +1,6 @@
 # config/dingtalk_robots.yaml — 钉钉机器人 (设计 §7.6)
 # 在钉钉群"群设置→机器人→添加→自定义"创建,选"加签"安全模式.
-# 把 webhook URL 与加签密钥放进 .env, 此处只用 ${VAR} 占位.
+# 把 webhook URL 与加签密钥放进 .env, 此处只引用环境变量名 (见下文).
 
 version: 1
 

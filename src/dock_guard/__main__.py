@@ -93,6 +93,12 @@ def _resolve_dir(user_arg: Path | None, container: Path, local: Path) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # 自动加载本地 .env 以注入 MQTT_* / DINGTALK_* 等环境变量.
+    # override=False: 已 export 的系统环境变量优先, .env 仅补缺失.
+    # 找不到 .env 不报错 (docker / 已 export 场景照旧).
+    from dotenv import load_dotenv  # 延迟 import: 仅 CLI 启动时需要
+    load_dotenv(override=False)
+
     parser = build_parser()
     args = parser.parse_args(argv)
 

@@ -46,6 +46,23 @@ class TestExpandEnvVars:
     def test_no_placeholders_passthrough(self) -> None:
         assert expand_env_vars("plain text", env={}) == "plain text"
 
+    def test_comment_lines_not_expanded(self) -> None:
+        """# 起头的整行 YAML 注释里的 ${VAR} 不应触发展开 / 不应入 missing."""
+        raw = (
+            "# this comment mentions ${VAR} as a literal placeholder\n"
+            "   # indented comment too: ${OTHER}\n"
+            "real: ${REAL}\n"
+        )
+        out = expand_env_vars(raw, env={"REAL": "x"})
+        assert "${VAR}" in out             # 注释保留原貌
+        assert "${OTHER}" in out
+        assert "real: x" in out
+
+    def test_comment_isolated_missing_var_does_not_raise(self) -> None:
+        raw = "# 用 ${SHOULD_BE_IGNORED} 占位\nreal: hi\n"
+        # 注释里的占位符不应让本来无 ${} 的 yaml 报错.
+        assert expand_env_vars(raw, env={}).startswith("# 用 ${SHOULD_BE_IGNORED}")
+
 
 def _minimal_runtime_yaml(*, dock_sn: str = "TEST_DOCK_01") -> str:
     return textwrap.dedent(f"""

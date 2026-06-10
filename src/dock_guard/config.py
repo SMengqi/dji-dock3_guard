@@ -50,7 +50,11 @@ def expand_env_vars(
     *,
     yaml_path: pathlib.Path | None = None,
 ) -> str:
-    """展开 ${VAR} 占位符. 任一变量未注入即抛 MissingEnvVarError."""
+    """展开 ${VAR} 占位符. 任一变量未注入即抛 MissingEnvVarError.
+
+    整行 YAML 注释 (以 # 起头, 可前置空格) 内的 ${VAR} 字面量不展开,
+    避免模板示例文本被误判 (例如 `# 此处用 ${VAR} 占位`).
+    """
     env_map = env if env is not None else os.environ
     missing: list[str] = []
 
@@ -61,7 +65,14 @@ def expand_env_vars(
             return m.group(0)
         return env_map[var]
 
-    result = _VAR_PATTERN.sub(_sub, raw)
+    out_lines: list[str] = []
+    for line in raw.splitlines(keepends=True):
+        if line.lstrip().startswith("#"):
+            out_lines.append(line)
+            continue
+        out_lines.append(_VAR_PATTERN.sub(_sub, line))
+    result = "".join(out_lines)
+
     if missing:
         seen: set[str] = set()
         unique_missing = [v for v in missing if not (v in seen or seen.add(v))]
