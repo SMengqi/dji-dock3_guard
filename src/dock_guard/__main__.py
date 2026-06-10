@@ -110,6 +110,15 @@ def _resolve_dir(user_arg: Path | None, container: Path, local: Path) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # nohup 把 stdout/stderr 重定向到文件时, Python 默认走块缓冲, banner 之后
+    # 几屏内容卡在缓冲里, "./run.sh logs live" 看不到进度. 强制 line-buffering
+    # 让 print() 见 \n 就 flush.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)   # type: ignore[union-attr]
+        sys.stderr.reconfigure(line_buffering=True)   # type: ignore[union-attr]
+    except (AttributeError, ValueError):
+        pass   # 罕见: 非标准 stdout (例如某些 IDE wrapper)
+
     # 自动加载本地 .env 以注入 MQTT_* / DINGTALK_* 等环境变量.
     # override=False: 已 export 的系统环境变量优先, .env 仅补缺失.
     # 找不到 .env 不报错 (docker / 已 export 场景照旧).
