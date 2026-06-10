@@ -303,9 +303,14 @@ async def _run_live(
 
     total = 0
     last_print_ts = 0
+    HEARTBEAT_EVERY = 100   # 每 N 条 envelope 打一行心跳; 1000 时人觉得僵.
     try:
         async for env in src:
             total += 1
+            # 首帧立即打一行, 让用户知道"流真的进来了"; 之后每 HEARTBEAT_EVERY 一次.
+            if total == 1:
+                print(f"  ... first envelope received "
+                      f"(topic_key={env.topic_key.value}, phase={agg.current_phase.value})")
             # Stage 2: 首帧到达 = mqtt_connected; OSD 类帧到达 = seen_first_osd
             if http_state is not None:
                 http_state.mqtt_connected = True
@@ -317,8 +322,7 @@ async def _run_live(
                 if batch:
                     # M1: 走 async 路径以触发 NotificationBus.dispatch (-> DingTalk).
                     await coordinator.handle_batch_async(batch)
-            # 每 1000 条心跳一次
-            if total - last_print_ts >= 1000:
+            if total - last_print_ts >= HEARTBEAT_EVERY:
                 print(f"  ... {total} envelopes processed, "
                       f"phase={agg.current_phase.value}")
                 last_print_ts = total
