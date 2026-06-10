@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 from collections import Counter
 from pathlib import Path
@@ -19,6 +20,13 @@ from dock_guard.aggregator import DockAggregator
 from dock_guard.config import AppConfig, MissingEnvVarError, load_app_config
 from dock_guard.coordinator import AlertCoordinator, Decision, JsonlAlertSink
 from dock_guard.ingest import MqttSource, ReplaySource
+from dock_guard.http import (
+    HttpState,
+    TokenMissing,
+    build_app,
+    load_admin_token,
+    start_http_server,
+)
 from dock_guard.notify import DingTalkChannel, NotificationBus, Router
 from dock_guard.rules import RuleEngine
 from dock_guard.types import ChannelKind, Severity, TopicKey
@@ -73,6 +81,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--require-auth-all", action="store_true",
                    help="所有 HTTP 端点强制鉴权 (默认仅 /admin/*)")
 
+    # Stage 2: HTTP 控制面 (设计 §7.2 + §8 + §9.3)
+    p.add_argument("--http-host", default="127.0.0.1",
+                   help="HTTP 控制面监听地址, 默认 127.0.0.1 (本机); 0.0.0.0 外开")
+    p.add_argument("--http-port", type=int, default=8081,
+                   help="HTTP 控制面监听端口, 默认 8081")
+    p.add_argument("--no-http", action="store_true",
+                   help="禁用 HTTP 控制面 (跳过 ADMIN_TOKEN 校验, /healthz 不可用)")
+
     p.add_argument("--log-level", choices=["DEBUG", "INFO", "WARN", "ERROR"],
                    default="INFO",
                    help="stdout 日志级别, 不影响 jsonl 文件")
@@ -112,6 +128,18 @@ def main(argv: list[str] | None = None) -> int:
 
     config_dir = _resolve_dir(args.config_dir, Path("/app/config"), Path("./config"))
     data_dir = _resolve_dir(args.data_dir, Path("/app/data"), Path("./data"))
+
+    # Stage 2: ADMIN_TOKEN fail-fast (除非 --no-http).
+    # 即便 --replay 也校验, 因为产品决策选了"未设拒启"统一行为.
+    admin_token: str | None = None
+    if not args.no_http:
+        try:
+            admin_token = load_admin_token(os.environ.get("ADMIN_TOKEN"))
+        except TokenMissing as e:
+            print(f"startup error: {e}", file=sys.stderr)
+            print("提示: 仅本机调试可加 --no-http 跳过 HTTP 控制面 (Stage 1 行为)",
+                  file=sys.stderr)
+            return 2
 
     print(f"dock_guard {__version__}  [Phase 1: config loaded]")
     print()
@@ -165,8 +193,14 @@ def main(argv: list[str] | None = None) -> int:
             args.replay, speed=args.replay_speed, cfg=cfg, data_dir=data_dir
         ))
 
-    # ── Phase 7: LIVE = 订 MQTT broker ─────────────────────────────
-    return asyncio.run(_run_live(cfg, data_dir=data_dir))
+    # ── Phase 7+Stage 2: LIVE = 订 MQTT broker + HTTP 控制面 ───────
+    return asyncio.run(_run_live(
+        cfg, data_dir=data_dir,
+        admin_token=admin_token,
+        http_host=args.http_host,
+        http_port=args.http_port,
+        http_enabled=not args.no_http,
+    ))
 
 
 def _build_notification_bus(cfg: AppConfig) -> NotificationBus | None:
@@ -183,9 +217,18 @@ def _build_notification_bus(cfg: AppConfig) -> NotificationBus | None:
     return NotificationBus(channels, router)
 
 
-async def _run_live(cfg: AppConfig, *, data_dir: Path = Path("data")) -> int:
+async def _run_live(
+    cfg: AppConfig,
+    *,
+    data_dir: Path = Path("data"),
+    admin_token: str | None = None,
+    http_host: str = "127.0.0.1",
+    http_port: int = 8081,
+    http_enabled: bool = True,
+) -> int:
     """M1 LIVE 模式: 订真实 MQTT broker -> Aggregator -> Rules ->
     AlertCoordinator -> NotificationBus -> DingTalkChannel.
+    Stage 2: 同进程额外起 uvicorn 跑 HTTP 控制面 (设计 §8 + §9.3).
     永远跑直到 Ctrl-C / SIGTERM.
     """
     src = MqttSource(cfg)
@@ -199,6 +242,10 @@ async def _run_live(cfg: AppConfig, *, data_dir: Path = Path("data")) -> int:
         print(f"  dingtalk    = {robot_ids}")
     else:
         print("  dingtalk    = (未配置 dingtalk_robots.yaml, 告警只入 alerts.jsonl)")
+    if http_enabled:
+        print(f"  http        = {http_host}:{http_port}  (/healthz /readyz; admin token required)")
+    else:
+        print("  http        = (--no-http)")
     print()
     print("注: 本服务仅 SUBSCRIBE; 任何 PUBLISH 到 thing/+/services 都是缺陷 (设计 §0.2).")
     print("Ctrl-C 停止.")
@@ -221,11 +268,29 @@ async def _run_live(cfg: AppConfig, *, data_dir: Path = Path("data")) -> int:
             cfg, sink=JsonlAlertSink(alerts_path), bus=bus
         )
 
+    # Stage 2: HTTP 控制面 (与 ingest 同 event loop).
+    import uvicorn as _uvicorn   # 仅类型提示
+    http_server: _uvicorn.Server | None = None
+    http_task: asyncio.Task[None] | None = None
+    http_state: HttpState | None = None
+    if http_enabled and admin_token is not None:
+        http_state = HttpState(admin_token=admin_token, replay_mode=False)
+        app = build_app(http_state)
+        http_server, http_task = await start_http_server(
+            app, host=http_host, port=http_port
+        )
+        print(f"http: listening on {http_host}:{http_port}")
+
     total = 0
     last_print_ts = 0
     try:
         async for env in src:
             total += 1
+            # Stage 2: 首帧到达 = mqtt_connected; OSD 类帧到达 = seen_first_osd
+            if http_state is not None:
+                http_state.mqtt_connected = True
+                if env.topic_key in (TopicKey.DOCK_OSD, TopicKey.DRONE_OSD):
+                    http_state.seen_first_osd = True
             agg.apply(env)
             if engine is not None and coordinator is not None:
                 batch = engine.evaluate()
@@ -240,6 +305,13 @@ async def _run_live(cfg: AppConfig, *, data_dir: Path = Path("data")) -> int:
     except KeyboardInterrupt:
         print("\nshutdown requested (Ctrl-C)")
     finally:
+        # Stage 2: 优雅关 HTTP (graceful) 再关下游.
+        if http_server is not None and http_task is not None:
+            http_server.should_exit = True
+            try:
+                await asyncio.wait_for(http_task, timeout=5.0)
+            except asyncio.TimeoutError:
+                http_task.cancel()
         if coordinator is not None:
             coordinator.close()
         if bus is not None:
