@@ -21,6 +21,7 @@ from dock_guard.config import AppConfig, MissingEnvVarError, load_app_config
 from dock_guard.coordinator import AlertCoordinator, Decision, JsonlAlertSink
 from dock_guard.ingest import MqttSource, ReplaySource, TlsSchemeMismatch
 from dock_guard.http import (
+    EventBus,
     HttpState,
     TokenMissing,
     build_app,
@@ -293,13 +294,17 @@ async def _run_live(
     http_server: _uvicorn.Server | None = None
     http_task: asyncio.Task[None] | None = None
     http_state: HttpState | None = None
+    event_bus: EventBus | None = None
     if http_enabled and admin_token is not None:
-        http_state = HttpState(admin_token=admin_token, replay_mode=False)
+        event_bus = EventBus()
+        http_state = HttpState(
+            admin_token=admin_token, replay_mode=False, event_bus=event_bus
+        )
         app = build_app(http_state)
         http_server, http_task = await start_http_server(
             app, host=http_host, port=http_port
         )
-        print(f"http: listening on {http_host}:{http_port}")
+        print(f"http: listening on {http_host}:{http_port} (/events SSE, /admin/*)")
 
     total = 0
     last_print_ts = 0
@@ -317,11 +322,31 @@ async def _run_live(
                 if env.topic_key in (TopicKey.DOCK_OSD, TopicKey.DRONE_OSD):
                     http_state.seen_first_osd = True
             agg.apply(env)
+            # Stage 2 B3: phase 切换流到 SSE.
+            if event_bus is not None:
+                for tr in agg.drain_phase_transitions():
+                    event_bus.publish("phase_transition", {
+                        "ts_ms": tr.ts_ms,
+                        "dock_sn": tr.dock_sn,
+                        "phase_from": tr.phase_from.value,
+                        "phase_to": tr.phase_to.value,
+                        "phase_source_from": tr.phase_source_from.value,
+                        "phase_source_to": tr.phase_source_to.value,
+                        "reason": tr.reason,
+                        "drone_height": tr.drone_height,
+                        "mode_code": tr.mode_code,
+                        "drone_in_dock": tr.drone_in_dock,
+                        "warnings": list(tr.warnings),
+                    })
             if engine is not None and coordinator is not None:
                 batch = engine.evaluate()
                 if batch:
                     # M1: 走 async 路径以触发 NotificationBus.dispatch (-> DingTalk).
-                    await coordinator.handle_batch_async(batch)
+                    records = await coordinator.handle_batch_async(batch)
+                    # Stage 2 B3: 告警 (含 SUPPRESSED 审计) 流到 SSE.
+                    if event_bus is not None:
+                        for rec in records:
+                            event_bus.publish("alert", rec.to_dict())
             if total - last_print_ts >= HEARTBEAT_EVERY:
                 print(f"  ... {total} envelopes processed, "
                       f"phase={agg.current_phase.value}")

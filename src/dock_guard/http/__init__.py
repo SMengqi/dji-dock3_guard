@@ -2,10 +2,12 @@
 
 from dock_guard.http.app import build_app
 from dock_guard.http.auth import TokenMissing, load_admin_token, make_admin_token_dependency
+from dock_guard.http.events import EventBus
 from dock_guard.http.server import start_http_server
 from dock_guard.http.state import HttpState
 
 __all__ = [
+    "EventBus",
     "HttpState",
     "TokenMissing",
     "build_app",
