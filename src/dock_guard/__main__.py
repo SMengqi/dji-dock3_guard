@@ -19,8 +19,9 @@ from dock_guard.aggregator import DockAggregator
 from dock_guard.config import AppConfig, MissingEnvVarError, load_app_config
 from dock_guard.coordinator import AlertCoordinator, Decision, JsonlAlertSink
 from dock_guard.ingest import MqttSource, ReplaySource
+from dock_guard.notify import DingTalkChannel, NotificationBus, Router
 from dock_guard.rules import RuleEngine
-from dock_guard.types import Severity, TopicKey
+from dock_guard.types import ChannelKind, Severity, TopicKey
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -137,31 +138,56 @@ def main(argv: list[str] | None = None) -> int:
     return asyncio.run(_run_live(cfg))
 
 
+def _build_notification_bus(cfg: AppConfig) -> NotificationBus | None:
+    """M1: 按 cfg.dingtalk_robots 装配 NotificationBus.
+
+    返回 None 表示未配置任何通道, AlertCoordinator 会降级为仅写 alerts.jsonl.
+    """
+    if cfg.dingtalk_robots is None or not cfg.dingtalk_robots.robots:
+        return None
+    channels = {
+        ChannelKind.DINGTALK: DingTalkChannel(list(cfg.dingtalk_robots.robots)),
+    }
+    router = Router(cfg.alert_levels, cfg.notification_routing)
+    return NotificationBus(channels, router)
+
+
 async def _run_live(cfg: AppConfig) -> int:
-    """Phase 7 LIVE 模式: 订真实 MQTT broker, 永远跑直到 Ctrl-C / SIGTERM."""
+    """M1 LIVE 模式: 订真实 MQTT broker -> Aggregator -> Rules ->
+    AlertCoordinator -> NotificationBus -> DingTalkChannel.
+    永远跑直到 Ctrl-C / SIGTERM.
+    """
     src = MqttSource(cfg)
     enabled = [s.dock_sn for s in cfg.runtime.subscriptions if s.enabled]
     print(f"live source: MQTT {cfg.runtime.mqtt.broker_url}")
     print(f"  docks       = {enabled}")
     print(f"  qos         = {cfg.runtime.mqtt.qos}")
     print(f"  tls         = {cfg.runtime.mqtt.tls.enabled}")
+    if cfg.dingtalk_robots is not None:
+        robot_ids = [r.id for r in cfg.dingtalk_robots.robots]
+        print(f"  dingtalk    = {robot_ids}")
+    else:
+        print("  dingtalk    = (未配置 dingtalk_robots.yaml, 告警只入 alerts.jsonl)")
     print()
     print("注: 本服务仅 SUBSCRIBE; 任何 PUBLISH 到 thing/+/services 都是缺陷 (设计 §0.2).")
     print("Ctrl-C 停止.")
     print()
 
-    # 当前 phase 7 暂只支持单 dock + 单 drone; 多 dock 留待 Phase 9.
+    # M1 仍仅支持单 dock + 单 drone; 多 dock 留待 Phase 9.
     if len(enabled) != 1:
-        print(f"warning: phase 7 仅支持 1 个启用的 dock, 检测到 {len(enabled)}", file=sys.stderr)
+        print(f"warning: M1 仅支持 1 个启用的 dock, 检测到 {len(enabled)}", file=sys.stderr)
         return 2
     dock_sn = enabled[0]
 
     agg = DockAggregator(dock_sn, cfg)
     engine = RuleEngine(cfg.rules, agg) if cfg.rules is not None else None
+    bus = _build_notification_bus(cfg)
     coordinator: AlertCoordinator | None = None
     if engine is not None:
         alerts_path = Path("data") / "alerts.jsonl"
-        coordinator = AlertCoordinator(cfg, sink=JsonlAlertSink(alerts_path))
+        coordinator = AlertCoordinator(
+            cfg, sink=JsonlAlertSink(alerts_path), bus=bus
+        )
 
     total = 0
     last_print_ts = 0
@@ -172,7 +198,8 @@ async def _run_live(cfg: AppConfig) -> int:
             if engine is not None and coordinator is not None:
                 batch = engine.evaluate()
                 if batch:
-                    coordinator.handle_batch(batch)
+                    # M1: 走 async 路径以触发 NotificationBus.dispatch (-> DingTalk).
+                    await coordinator.handle_batch_async(batch)
             # 每 1000 条心跳一次
             if total - last_print_ts >= 1000:
                 print(f"  ... {total} envelopes processed, "
@@ -183,6 +210,8 @@ async def _run_live(cfg: AppConfig) -> int:
     finally:
         if coordinator is not None:
             coordinator.close()
+        if bus is not None:
+            await bus.close()
         await src.close()
     return 0
 

@@ -26,6 +26,13 @@ class FakeMessage:
 
 
 class FakeMqttClient:
+    """伪 aiomqtt.Client.
+
+    重要: MqttSource.__aiter__ 是 `while not _stop_event.is_set()` 的重连循环;
+    伪客户端的 messages 生成器消费完后, 必须显式 set src._stop_event 才能
+    让外层退出, 否则测试会无限重连. 测试构造完 src 后用 _wire(fake, src) 关联.
+    """
+
     def __init__(
         self,
         messages: list[FakeMessage] | None = None,
@@ -35,6 +42,7 @@ class FakeMqttClient:
         self._messages = list(messages or [])
         self.subscriptions: list[tuple[str, int]] = []
         self._raise_enter = raise_on_enter
+        self.stop_on_exhaust: asyncio.Event | None = None
 
     async def __aenter__(self) -> FakeMqttClient:
         if self._raise_enter is not None:
@@ -52,7 +60,14 @@ class FakeMqttClient:
         async def _gen() -> AsyncIterator[FakeMessage]:
             for m in self._messages:
                 yield m
+            if self.stop_on_exhaust is not None:
+                self.stop_on_exhaust.set()
         return _gen()
+
+
+def _wire(fake: FakeMqttClient, src: MqttSource) -> None:
+    """伪客户端消息消费完后让 source 自然退出 (避免无限重连)."""
+    fake.stop_on_exhaust = src._stop_event
 
 
 # ─── 共享 fixture ──────────────────────────────────────────────────
@@ -95,6 +110,7 @@ class TestSubscriptionPlan:
         cfg = _make_cfg(tmp_path, dock_sn="8UU1")
         fake = FakeMqttClient()
         src = MqttSource(cfg, client_factory=lambda: fake)
+        _wire(fake, src)
 
         async for _ in src:
             pytest.fail("no messages expected")
@@ -124,6 +140,7 @@ class TestDroneSnDiscovery:
         )
         fake = FakeMqttClient([dock_osd])
         src = MqttSource(cfg, client_factory=lambda: fake)
+        _wire(fake, src)
         envs = []
         async for env in src:
             envs.append(env)
@@ -143,6 +160,7 @@ class TestDroneSnDiscovery:
         )
         fake = FakeMqttClient([dock_osd])
         src = MqttSource(cfg, client_factory=lambda: fake)
+        _wire(fake, src)
         async for _ in src:
             pass
         subs = [t for t, _ in fake.subscriptions]
@@ -159,6 +177,7 @@ class TestBuildEnvelope:
                           {"data": {"foo": "bar"}, "timestamp": 1700000000000})
         fake = FakeMqttClient([msg])
         src = MqttSource(cfg, client_factory=lambda: fake)
+        _wire(fake, src)
         envs = []
         async for env in src:
             envs.append(env)
@@ -179,6 +198,7 @@ class TestBuildEnvelope:
                            {"data": {"x": 1}, "timestamp": 1})
         fake = FakeMqttClient([bad, good])
         src = MqttSource(cfg, client_factory=lambda: fake)
+        _wire(fake, src)
         envs = []
         async for env in src:
             envs.append(env)
@@ -190,6 +210,7 @@ class TestBuildEnvelope:
                               {"data": {}, "timestamp": 1})
         fake = FakeMqttClient([unknown])
         src = MqttSource(cfg, client_factory=lambda: fake)
+        _wire(fake, src)
         envs = []
         async for env in src:
             envs.append(env)
