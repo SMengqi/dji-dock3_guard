@@ -126,6 +126,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    # 把 --log-level 真接到 stdlib logging (此前定义了 CLI 参数但没用,
+    # 导致 MqttSource 的 'subscribed: <topic>' 等 INFO 日志被默默吞掉,
+    # 看上去 "连上 broker 但没动静"). uvicorn 的日志另由 uvicorn.Config 控制,
+    # 这里仅管 dock_guard 自家模块.
+    import logging
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
     config_dir = _resolve_dir(args.config_dir, Path("/app/config"), Path("./config"))
     data_dir = _resolve_dir(args.data_dir, Path("/app/data"), Path("./data"))
 
