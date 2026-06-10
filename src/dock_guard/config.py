@@ -295,8 +295,8 @@ def load_enums(path: pathlib.Path) -> EnumsYaml:
 class AppConfig:
     """启动期所有必要配置的聚合.
 
-    可选 yaml (battery_reference / drone_kinematics / hms_codes / webhooks
-    / dingtalk_robots / notification_routing) 在后续 phase 扩展.
+    可选 yaml (battery_reference / drone_kinematics / hms_codes / webhooks)
+    在后续 phase 扩展.
     """
 
     config_dir: pathlib.Path
@@ -304,7 +304,9 @@ class AppConfig:
     mode_code_map: ModeCodeMapYaml
     alert_levels: AlertLevelsYaml
     enums: EnumsYaml
-    rules: Any = None   # RulesYaml; Phase 4+ 加载
+    rules: Any = None                   # RulesYaml; Phase 4+ 加载
+    dingtalk_robots: Any = None         # DingTalkRobotsYaml | None; 文件缺失 = 不开钉钉通道
+    notification_routing: Any = None    # NotificationRoutingYaml | None; 缺失 = 用 alert_levels 默认路由
 
 
 def load_app_config(
@@ -313,12 +315,27 @@ def load_app_config(
     env: Mapping[str, str] | None = None,
     with_rules: bool = True,
 ) -> AppConfig:
-    """加载所有必备 yaml. 任一缺失/校验错 -> fail-fast."""
-    from dock_guard.rules.loader import load_rules_yaml  # 延迟 import 避免循环
+    """加载所有必备 yaml. 任一缺失/校验错 -> fail-fast.
+
+    通知层 yaml (dingtalk_robots / notification_routing) **文件缺失视为可选**:
+    缺 dingtalk_robots.yaml -> 不开钉钉通道, 仅入 alerts.jsonl;
+    存在但 ${VAR} 未注入或 schema 错 -> 仍 fail-fast (避免无声空跑).
+    """
+    from dock_guard.notify.loader import (  # 延迟 import 避免循环
+        load_dingtalk_robots,
+        load_notification_routing,
+    )
+    from dock_guard.rules.loader import load_rules_yaml
 
     rules = None
     if with_rules:
         rules = load_rules_yaml(config_dir / "rules.yaml")
+
+    dingtalk_path = config_dir / "dingtalk_robots.yaml"
+    dingtalk = load_dingtalk_robots(dingtalk_path, env) if dingtalk_path.exists() else None
+
+    routing_path = config_dir / "notification_routing.yaml"
+    routing = load_notification_routing(routing_path) if routing_path.exists() else None
 
     return AppConfig(
         config_dir=config_dir,
@@ -327,4 +344,6 @@ def load_app_config(
         alert_levels=load_alert_levels(config_dir / "alert_levels.yaml"),
         enums=load_enums(config_dir / "enums.yaml"),
         rules=rules,
+        dingtalk_robots=dingtalk,
+        notification_routing=routing,
     )

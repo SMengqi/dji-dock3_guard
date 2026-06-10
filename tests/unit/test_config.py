@@ -237,3 +237,81 @@ def test_load_app_config_with_repo_configs(tmp_path: pathlib.Path) -> None:
     assert cfg.mode_code_map.drone_model == "M4D"
     assert cfg.alert_levels.coordinator.emergency_floor_cooldown_ms == 2000
     assert cfg.enums.rainfall_trend["ESCALATING"] == 1
+    # M1: 钉钉/路由 yaml 不在 tmp_path 中, 应降级为 None.
+    assert cfg.dingtalk_robots is None
+    assert cfg.notification_routing is None
+
+
+# ── M1: notification yaml 可选加载 ──────────────────────────────────
+
+
+_M1_ENV = {
+    **_GOOD_ENV,
+    "DINGTALK_BOT_WEBHOOK_PRIMARY": "https://oapi.dingtalk.com/robot/send?access_token=fake",
+    "DINGTALK_BOT_SECRET_PRIMARY": "SECfake",
+}
+
+
+def _seed_min_configs(dst: pathlib.Path, repo_config_dir: pathlib.Path) -> None:
+    """把仓库内固定 yaml symlink 到 dst, 再写最小 runtime.yaml."""
+    for name in ("mode_code_map.yaml", "alert_levels.yaml", "enums.yaml"):
+        (dst / name).symlink_to(repo_config_dir / name)
+    (dst / "runtime.yaml").write_text(_minimal_runtime_yaml())
+
+
+class TestNotificationConfigLoading:
+    def _repo_config_dir(self) -> pathlib.Path:
+        return pathlib.Path(__file__).resolve().parents[2] / "config"
+
+    def test_dingtalk_yaml_present_loads(self, tmp_path: pathlib.Path) -> None:
+        repo = self._repo_config_dir()
+        if not (repo / "mode_code_map.yaml").exists():
+            pytest.skip("repo config dir not present")
+        _seed_min_configs(tmp_path, repo)
+        (tmp_path / "dingtalk_robots.yaml").write_text(textwrap.dedent("""
+            version: 1
+            robots:
+              - id: ops-primary
+                webhook_url: ${DINGTALK_BOT_WEBHOOK_PRIMARY}
+                secret:      ${DINGTALK_BOT_SECRET_PRIMARY}
+                min_severity: WARN
+        """))
+        cfg = load_app_config(tmp_path, env=_M1_ENV, with_rules=False)
+        assert cfg.dingtalk_robots is not None
+        assert len(cfg.dingtalk_robots.robots) == 1
+        assert cfg.dingtalk_robots.robots[0].id == "ops-primary"
+        assert cfg.dingtalk_robots.robots[0].webhook_url.endswith("fake")
+        assert cfg.notification_routing is None
+
+    def test_dingtalk_yaml_missing_env_var_fails(self, tmp_path: pathlib.Path) -> None:
+        """文件存在但 ${VAR} 未注入应 fail-fast, 不能静默降级."""
+        repo = self._repo_config_dir()
+        if not (repo / "mode_code_map.yaml").exists():
+            pytest.skip("repo config dir not present")
+        _seed_min_configs(tmp_path, repo)
+        (tmp_path / "dingtalk_robots.yaml").write_text(textwrap.dedent("""
+            version: 1
+            robots:
+              - id: ops-primary
+                webhook_url: ${DINGTALK_BOT_WEBHOOK_PRIMARY}
+                secret:      ${DINGTALK_BOT_SECRET_PRIMARY}
+        """))
+        with pytest.raises(MissingEnvVarError) as exc:
+            load_app_config(tmp_path, env=_GOOD_ENV, with_rules=False)
+        assert "DINGTALK_BOT_WEBHOOK_PRIMARY" in exc.value.var_names
+
+    def test_routing_yaml_present_loads(self, tmp_path: pathlib.Path) -> None:
+        repo = self._repo_config_dir()
+        if not (repo / "mode_code_map.yaml").exists():
+            pytest.skip("repo config dir not present")
+        _seed_min_configs(tmp_path, repo)
+        (tmp_path / "notification_routing.yaml").write_text(textwrap.dedent("""
+            version: 1
+            overrides:
+              WIND_EXCEEDED_INFLIGHT:
+                channels: [dingtalk]
+                dingtalk_robots: [ops-primary]
+        """))
+        cfg = load_app_config(tmp_path, env=_GOOD_ENV, with_rules=False)
+        assert cfg.notification_routing is not None
+        assert "WIND_EXCEEDED_INFLIGHT" in cfg.notification_routing.overrides
