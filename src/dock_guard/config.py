@@ -106,12 +106,21 @@ class ReconnectConfig(_Strict):
 
 class MqttConfig(_Strict):
     broker_url: str = Field(min_length=1)
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=1)
+    # 空 / null = 不发 auth (sim 本地 mosquitto 默认无 auth);
+    # 真 broker 由 broker 本身拒绝匿名, 而不是在此处强制 min_length=1.
+    username: str = ""
+    password: str = ""
     client_id_prefix: str = "dock_guard"
     tls: TLSConfig = TLSConfig()
     qos: int = Field(default=1, ge=0, le=2)
     reconnect: ReconnectConfig = ReconnectConfig()
+
+    @field_validator("username", "password", mode="before")
+    @classmethod
+    def _none_to_empty(cls, v: object) -> object:
+        """YAML 把空标量解析为 None (e.g. `username: ${MQTT_USERNAME}` 当 env 空时);
+        统一归一成空串, 让下游 'or None' 的判断生效."""
+        return "" if v is None else v
 
 
 class TopicDefaults(_Strict):

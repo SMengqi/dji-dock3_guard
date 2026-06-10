@@ -111,8 +111,10 @@ class MqttSource:
         return aiomqtt.Client(
             hostname=host,
             port=port,
-            username=mqtt.username,
-            password=mqtt.password,
+            # 空串 -> None: aiomqtt / paho 在 None 时不发 CONNECT.user/password
+            # (本地 sim mosquitto 默认无 auth 即可走通).
+            username=mqtt.username or None,
+            password=mqtt.password or None,
             identifier=identifier,
             tls_context=tls_context,
         )

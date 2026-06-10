@@ -145,6 +145,43 @@ class TestLoadRuntimeYaml:
         with pytest.raises(ValidationError, match="unknown topic keys"):
             load_runtime_yaml(path, env=_GOOD_ENV)
 
+    def test_empty_username_password_allowed(self, tmp_path: pathlib.Path) -> None:
+        """sim 本地 mosquitto 无 auth: 空 username/password 应通过校验."""
+        path = tmp_path / "runtime.yaml"
+        path.write_text(textwrap.dedent("""
+            schema_version: 1
+            mqtt:
+              broker_url:  tcp://localhost:1883
+              username:    ""
+              password:    ""
+            subscriptions:
+              - dock_sn: SIM_DOCK
+                enabled: true
+        """))
+        cfg = load_runtime_yaml(path)
+        assert cfg.mqtt.username == ""
+        assert cfg.mqtt.password == ""
+
+    def test_null_username_password_normalized_to_empty(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """YAML 空标量解析为 None (例如 ${VAR} 展开为空时),
+        应统一归一为 ""."""
+        path = tmp_path / "runtime.yaml"
+        path.write_text(textwrap.dedent("""
+            schema_version: 1
+            mqtt:
+              broker_url:  tcp://localhost:1883
+              username:
+              password:
+            subscriptions:
+              - dock_sn: SIM_DOCK
+                enabled: true
+        """))
+        cfg = load_runtime_yaml(path)
+        assert cfg.mqtt.username == ""
+        assert cfg.mqtt.password == ""
+
     def test_wildcard_alone_is_valid(self, tmp_path: pathlib.Path) -> None:
         path = tmp_path / "runtime.yaml"
         path.write_text(textwrap.dedent("""
