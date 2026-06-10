@@ -15,23 +15,12 @@ DJI 大疆机场 3 飞行安全评估与告警系统。
 | **A. 实时告警** | `python -m dock_guard` | MQTT 订阅 → 规则评估 → 钉钉/Webhook/面板 |
 | **B. 离线分析** | `python -m dock_guard.analytics` | 读 `sim_dji_cloud_service` 录制目录 → 电池/航时/链路统计（设计 §13） |
 
-## 实现进度（v2 实施）
+## 实现进度（按产品能力 Stage 划分）
 
-- [x] Phase 0 — 项目骨架（pyproject / Dockerfile / 配置模板 / conftest）
-- [x] Phase 1 — Config 加载 + types
-- [x] Phase 2 — Envelope + ReplaySource
-- [x] Phase 3 — Aggregator + PhaseMachine + FactsRing
-- [x] Phase 4 — RuleEngine + custom_fn 白名单（custom_fn 实装留 Phase 11）
-- [x] Phase 5 — AlertCoordinator + alerts.jsonl
-- [x] Phase 6 — DingTalk / Webhook 通道
-- [x] Phase 7 — MqttSource
-- [x] **M1 — LIVE → 钉钉端到端打通**（订真 broker、规则 fire、钉钉收卡片、alerts.jsonl 落 DISPATCHED）
-- [ ] Phase 8 — FastAPI 控制面 + Panel SSE
-- [ ] Phase 9 — Prometheus / JsonlSink rotation / 多 dock
-- [ ] Phase 10 — 跨切（鉴权 / §10.5 治理）
-- [ ] Phase 11 — §5.4 custom_fn 三函数实装 + 其余 §11 🟡
-- [ ] Phase 12 — §12 验收 + CI 强制门
-- [ ] Phase 13+ — §13 离线分析子系统
+每个 Stage = 一个可对外演示的产品能力（不是按代码模块）。详见设计文档 §11.0。
+
+- [x] **Stage 1 — 实时告警最小闭环**：订真 broker / sim broker → 阶段机识别 → 规则触发 → 钉钉收到 `[BLOCK]/[RETURN]` 卡片 → `alerts.jsonl` 落 DISPATCHED；含 `run.sh` 后台运维 + SIGTERM graceful + sim 联调 + 真 broker 切换。涵盖 16 个 commit `a2678cc → 4477df0`。
+- [ ] **Stage 2 — 待产品选定**：A 运维控制台 / B 多机场上线 / C 告警精度 / D 工程化验收 / E 离线复盘骨架 / F 离线分析-电池 / G 离线分析-RTH / H 离线分析-链路。8 个能力候选见 §11.0.2。
 
 ## M1 快速启动（sim 联调，30 秒跑通）
 
