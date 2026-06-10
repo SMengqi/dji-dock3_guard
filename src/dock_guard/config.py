@@ -151,6 +151,27 @@ class DockSubscription(_Strict):
     # per-dock 覆盖. key 必须在 TopicKey 集合内.
     topics: dict[str, bool] | None = None
 
+    @field_validator("dock_sn")
+    @classmethod
+    def _no_template_placeholder(cls, v: str) -> str:
+        """模板未填的常见占位符 (REPLACE_WITH_*, TODO, <...>, ...) 启动期拒启.
+        否则 MqttSource 会真去订一个不存在的 topic, 永远收不到数据,
+        看上去"连上了 broker 但没动静"——非常难诊断."""
+        s = v.strip()
+        upper = s.upper()
+        # 真实 DJI SN 是字母数字混排, 不会出现 REPLACE/TODO/FIXME 这些单词,
+        # 故用 substring 命中即拒.
+        bad_markers = ("REPLACE", "TODO", "FIXME", "FILL_ME", "FILL_IN")
+        if any(m in upper for m in bad_markers):
+            raise ValueError(
+                f"dock_sn 看起来仍是模板占位符 {v!r}; "
+                f"请把 runtime.yaml 的 subscriptions[].dock_sn 改成真实机场 SN "
+                f"(例如 sim 录制样本: 8UUXN7N00A0GAA)"
+            )
+        if s.startswith("<") and s.endswith(">"):
+            raise ValueError(f"dock_sn 看起来仍是 <占位符> {v!r}, 请填实际 SN")
+        return v
+
     @field_validator("topics")
     @classmethod
     def _validate_topic_keys(cls, v: dict[str, bool] | None) -> dict[str, bool] | None:

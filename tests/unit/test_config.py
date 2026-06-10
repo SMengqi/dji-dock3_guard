@@ -198,6 +198,30 @@ class TestLoadRuntimeYaml:
         assert cfg.wildcard_subscribe.enabled is True
 
 
+class TestDockSubscriptionPlaceholder:
+    """模板未填 dock_sn 应启动期拒启 (避免订阅一个不存在的 topic 静默吃数据)."""
+
+    def test_replace_with_real_dock_sn_fails(self) -> None:
+        with pytest.raises(ValidationError, match="模板占位符"):
+            DockSubscription(dock_sn="REPLACE_WITH_REAL_DOCK_SN")
+
+    def test_replace_marker_anywhere_fails(self) -> None:
+        with pytest.raises(ValidationError, match="模板占位符"):
+            DockSubscription(dock_sn="REPLACE_ME")
+
+    def test_todo_marker_fails(self) -> None:
+        with pytest.raises(ValidationError, match="模板占位符"):
+            DockSubscription(dock_sn="TODO_FILL_DOCK_SN")
+
+    def test_angle_bracket_placeholder_fails(self) -> None:
+        with pytest.raises(ValidationError, match="<占位符>"):
+            DockSubscription(dock_sn="<your-dock-sn>")
+
+    def test_real_sn_passes(self) -> None:
+        sub = DockSubscription(dock_sn="8UUXN7N00A0GAA")
+        assert sub.dock_sn == "8UUXN7N00A0GAA"
+
+
 class TestDockSubscriptionOverride:
     def test_effective_topics_merges(self) -> None:
         defaults = TopicDefaults()
