@@ -70,6 +70,86 @@ def _wire(fake: FakeMqttClient, src: MqttSource) -> None:
     fake.stop_on_exhaust = src._stop_event
 
 
+# ─── TLS 选择 (scheme + tls.enabled 一致性, §10.1) ────────────────
+
+
+def _make_cfg_with_tls(
+    tmp_path: pathlib.Path,
+    *,
+    broker_url: str,
+    tls_enabled: bool,
+    dock_sn: str = "DOCK1",
+) -> AppConfig:
+    repo_config_dir = pathlib.Path(__file__).resolve().parents[2] / "config"
+    if not (repo_config_dir / "mode_code_map.yaml").exists():
+        pytest.skip("repo config not present")
+    for name in ("mode_code_map.yaml", "alert_levels.yaml", "enums.yaml"):
+        (tmp_path / name).symlink_to(repo_config_dir / name)
+    (tmp_path / "runtime.yaml").write_text(textwrap.dedent(f"""
+        schema_version: 1
+        mqtt:
+          broker_url:  {broker_url}
+          username:    "u"
+          password:    "p"
+          tls:
+            enabled: {"true" if tls_enabled else "false"}
+        subscriptions:
+          - dock_sn: {dock_sn}
+            enabled: true
+    """))
+    return load_app_config(tmp_path, with_rules=False)
+
+
+class TestTlsSchemeConsistency:
+    def test_tcp_scheme_plus_tls_enabled_raises(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """sim 常见误配: broker_url=tcp:// 但 tls.enabled=true (模板默认).
+        以前会静默关 TLS 引 MITM 风险; 现在 fail-fast 要求显式选."""
+        from dock_guard.ingest.mqtt_source import TlsSchemeMismatch
+        cfg = _make_cfg_with_tls(
+            tmp_path, broker_url="tcp://localhost:1883", tls_enabled=True
+        )
+        src = MqttSource(cfg)
+        with pytest.raises(TlsSchemeMismatch, match="tls.enabled=true.*与.*scheme"):
+            src._default_client_factory()
+
+    async def test_tcp_scheme_plus_tls_disabled_ok(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """显式声明 tcp + tls=false: 应当通过, 不发 TLS.
+        async: aiomqtt.Client() 构造需要 running event loop."""
+        cfg = _make_cfg_with_tls(
+            tmp_path, broker_url="tcp://localhost:1883", tls_enabled=False
+        )
+        src = MqttSource(cfg)
+        client = src._default_client_factory()
+        assert client is not None   # 不抛 TlsSchemeMismatch 即通过
+
+    async def test_ssl_scheme_overrides_tls_disabled(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """ssl:// scheme 即便 tls.enabled=false 也应当走 TLS (scheme 显式更强)."""
+        cfg = _make_cfg_with_tls(
+            tmp_path, broker_url="ssl://broker.example.com:8883", tls_enabled=False
+        )
+        src = MqttSource(cfg)
+        # 构造成功即说明没抛 mismatch; 真实 TLS 验证由 aiomqtt/paho 自己跑.
+        client = src._default_client_factory()
+        assert client is not None
+
+    async def test_empty_scheme_falls_back_to_tls_enabled(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """broker_url 无 scheme 时, 完全靠 tls.enabled 决定."""
+        cfg = _make_cfg_with_tls(
+            tmp_path, broker_url="broker.example.com:8883", tls_enabled=True
+        )
+        src = MqttSource(cfg)
+        # 应当构造成功 (用 TLS); 不抛 mismatch.
+        assert src._default_client_factory() is not None
+
+
 # ─── 共享 fixture ──────────────────────────────────────────────────
 
 

@@ -6,8 +6,15 @@
 两者实现同一 Source 协议, 下游管线共用.
 """
 
-from dock_guard.ingest.mqtt_source import MqttSource
+from dock_guard.ingest.mqtt_source import MqttSource, TlsSchemeMismatch
 from dock_guard.ingest.replay_source import ReplaySource
 from dock_guard.ingest.source import Envelope, Source, parse_topic
 
-__all__ = ["Envelope", "MqttSource", "ReplaySource", "Source", "parse_topic"]
+__all__ = [
+    "Envelope",
+    "MqttSource",
+    "ReplaySource",
+    "Source",
+    "TlsSchemeMismatch",
+    "parse_topic",
+]

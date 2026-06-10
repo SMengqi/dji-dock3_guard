@@ -29,6 +29,14 @@ from dock_guard.types import DRONE_SN_TOPICS, TOPIC_TEMPLATES, TopicKey
 logger = logging.getLogger(__name__)
 
 
+class TlsSchemeMismatch(ValueError):
+    """broker_url scheme 与 tls.enabled 自相矛盾, 拒绝替用户决定 TLS 用否.
+
+    安全口径 (设计 §10.1): 静默关 TLS 是反模式 (MITM 风险);
+    必须由用户在 runtime.yaml 显式声明意图.
+    """
+
+
 class MqttSource:
     """实现 Source 协议."""
 
@@ -94,8 +102,24 @@ class MqttSource:
         scheme = (parsed.scheme or "").lower()
         port = parsed.port or (8883 if scheme in ("ssl", "mqtts") else 1883)
 
+        # TLS 判定: 不替用户做 "silent disable TLS" 决定 (MITM 风险, §10.1).
+        # - ssl:// / mqtts://             -> TLS on
+        # - tcp:// / mqtt://  + tls=false -> TLS off (明文, 仅 sim/本地)
+        # - tcp:// / mqtt://  + tls=true  -> 抛 TlsSchemeMismatch, 用户必须改一处
+        # - 空 / 其他                      -> fall back to tls.enabled
+        scheme_wants_tls = scheme in ("ssl", "mqtts")
+        scheme_no_tls = scheme in ("tcp", "mqtt")
+        if scheme_no_tls and mqtt.tls.enabled:
+            raise TlsSchemeMismatch(
+                f"runtime.yaml: mqtt.tls.enabled=true 与 broker_url scheme "
+                f"{scheme!r} 冲突. 静默关 TLS 是 MITM 风险 (§10.1), 请显式选: "
+                f"(a) 本地 sim 走明文 -> 改 tls.enabled=false; "
+                f"(b) 生产走 TLS -> 把 broker_url 改为 ssl://... 或 mqtts://..."
+            )
+        use_tls = scheme_wants_tls or mqtt.tls.enabled
+
         tls_context: ssl.SSLContext | None = None
-        if mqtt.tls.enabled or scheme in ("ssl", "mqtts"):
+        if use_tls:
             tls_context = ssl.create_default_context()
             if mqtt.tls.ca_cert_path:
                 tls_context.load_verify_locations(mqtt.tls.ca_cert_path)

@@ -5,12 +5,20 @@
 schema_version: 1
 
 mqtt:
-  broker_url:  ${MQTT_BROKER_URL}        # ssl://broker.example.com:8883
+  # broker_url 形如:
+  #   ssl://broker.example.com:8883    生产 / 真 broker (强 TLS)
+  #   mqtts://broker.example.com:8883  同上, 等价
+  #   tcp://localhost:1883             sim / 本地 mosquitto (明文)
+  #   mqtt://localhost:1883            同上, 等价
+  # tls.enabled 必须与 scheme 一致 (启动期 fail-fast 不替你决定关 TLS, MITM 风险).
+  broker_url:  ${MQTT_BROKER_URL}
   username:    ${MQTT_USERNAME}
   password:    ${MQTT_PASSWORD}
   client_id_prefix: dock_guard            # 实际 = "<prefix>-<host>-<pid>"
   tls:
-    enabled: true
+    # 默认 false 适配 sim 联调; 切真 broker (ssl:// scheme) 时改 true.
+    # 显式声明: scheme=tcp/mqtt 时 tls.enabled 必须 false (反之 ssl/mqtts 时 true).
+    enabled: false
     ca_cert_path:   ""                    # 自签证书时填路径; 公共 CA 留空
     verify_hostname: true                 # false 仅关闭主机名匹配, 证书链验证始终开;
                                           # 自签场景请用 ca_cert_path 而非关验证

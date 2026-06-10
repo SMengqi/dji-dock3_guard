@@ -19,7 +19,7 @@ from dock_guard import __version__
 from dock_guard.aggregator import DockAggregator
 from dock_guard.config import AppConfig, MissingEnvVarError, load_app_config
 from dock_guard.coordinator import AlertCoordinator, Decision, JsonlAlertSink
-from dock_guard.ingest import MqttSource, ReplaySource
+from dock_guard.ingest import MqttSource, ReplaySource, TlsSchemeMismatch
 from dock_guard.http import (
     HttpState,
     TokenMissing,
@@ -304,6 +304,10 @@ async def _run_live(
                 last_print_ts = total
     except KeyboardInterrupt:
         print("\nshutdown requested (Ctrl-C)")
+    except TlsSchemeMismatch as e:
+        # 安全护栏 (§10.1): scheme 与 tls.enabled 自相矛盾, 拒绝替用户决定 TLS.
+        print(f"\nstartup error (TLS): {e}", file=sys.stderr)
+        return 2
     finally:
         # Stage 2: 优雅关 HTTP (graceful) 再关下游.
         if http_server is not None and http_task is not None:
