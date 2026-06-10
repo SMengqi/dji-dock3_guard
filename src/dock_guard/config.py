@@ -3,7 +3,7 @@
 设计原则:
 - 所有 yaml 启动期 pydantic 校验, 任一字段缺失/类型错 -> fail-fast.
 - ${VAR} 占位符从 os.environ 展开, 缺失环境变量 -> fail-fast 并报具体变量名.
-- 仓库只入 .example, 真实配置由 install.sh --copy-config 生成.
+- 仓库只入 .example, 真实配置由 install.sh (默认开启 copy) 生成.
 
 对应设计章节:
 - runtime.yaml         §15.1

@@ -36,3 +36,4 @@ config/drone_kinematics.yaml
 .vscode/
 *.swp
 .DS_Store
+logs/

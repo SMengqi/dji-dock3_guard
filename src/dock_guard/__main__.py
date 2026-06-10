@@ -99,6 +99,14 @@ def main(argv: list[str] | None = None) -> int:
     from dotenv import load_dotenv  # 延迟 import: 仅 CLI 启动时需要
     load_dotenv(override=False)
 
+    # SIGTERM 转 KeyboardInterrupt: 让 nohup 后台跑的进程被
+    # `kill <pid>` (即 ./run.sh stop) 触发与 Ctrl-C 同款的 graceful 清理
+    # (关 NotificationBus / 关 JsonlAlertSink / 关 MqttSource).
+    import signal as _signal
+    def _sigterm_to_keyint(signum: int, frame: object) -> None:
+        raise KeyboardInterrupt
+    _signal.signal(_signal.SIGTERM, _sigterm_to_keyint)
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -281,23 +289,26 @@ async def _run_replay(
     verdicts = []
     alert_records = []
 
-    async for env in src:
-        counts[env.topic_key] += 1
-        total += 1
-        if first_ts is None:
-            first_ts = env.recv_ts_ms
-        last_ts = env.recv_ts_ms
-        agg.apply(env)
-        transitions.extend(agg.drain_phase_transitions())
-        if engine is not None:
-            batch = engine.evaluate()
-            verdicts.extend(batch)
-            if coordinator is not None and batch:
-                alert_records.extend(coordinator.handle_batch(batch))
-
-    if coordinator is not None:
-        coordinator.close()
-    await src.close()
+    try:
+        async for env in src:
+            counts[env.topic_key] += 1
+            total += 1
+            if first_ts is None:
+                first_ts = env.recv_ts_ms
+            last_ts = env.recv_ts_ms
+            agg.apply(env)
+            transitions.extend(agg.drain_phase_transitions())
+            if engine is not None:
+                batch = engine.evaluate()
+                verdicts.extend(batch)
+                if coordinator is not None and batch:
+                    alert_records.extend(coordinator.handle_batch(batch))
+    except KeyboardInterrupt:
+        print("\nreplay interrupted; printing partial summary...")
+    finally:
+        if coordinator is not None:
+            coordinator.close()
+        await src.close()
 
     print(f"  total envelopes = {total}")
     if first_ts is not None and last_ts is not None:

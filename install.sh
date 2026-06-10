@@ -2,12 +2,12 @@
 # install.sh — dock_guard 一键装包脚本
 #
 # 用法:
-#   ./install.sh                # 装包+开发依赖
-#   ./install.sh --no-dev       # 仅生产依赖
-#   ./install.sh --recreate     # 删除现有 .venv 重建
-#   ./install.sh --copy-config  # 同时复制 *.yaml.example -> *.yaml (仅当目标不存在)
+#   ./install.sh                  # 装包+开发依赖 + 自动复制配置模板 (默认)
+#   ./install.sh --no-dev         # 仅生产依赖
+#   ./install.sh --no-copy-config # 跳过 *.yaml.example/.env.example 复制
+#   ./install.sh --recreate       # 删除现有 .venv 重建
 #
-# 多次运行安全; 已存在的资源不会被覆盖.
+# 多次运行安全: 已存在的 *.yaml / .env 不会被覆盖.
 
 set -euo pipefail
 
@@ -16,15 +16,16 @@ PYTHON_MIN_MAJOR=3
 PYTHON_MIN_MINOR=12
 VENV_DIR=".venv"
 EXTRAS="[dev]"
-COPY_CONFIG=0
+COPY_CONFIG=1   # 默认开; --no-copy-config 关闭
 RECREATE=0
 
 # ─── 解析参数 ─────────────────────────────────────────────────────
 for arg in "$@"; do
   case "$arg" in
-    --no-dev)       EXTRAS="" ;;
-    --copy-config)  COPY_CONFIG=1 ;;
-    --recreate)     RECREATE=1 ;;
+    --no-dev)         EXTRAS="" ;;
+    --no-copy-config) COPY_CONFIG=0 ;;
+    --copy-config)    COPY_CONFIG=1 ;;   # 兼容旧用法 (默认已开, 重复指定无副作用)
+    --recreate)       RECREATE=1 ;;
     -h|--help)
       sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -139,14 +140,10 @@ ok "Phase 0 安装完成"
 echo
 echo "下一步:"
 echo "  1) 激活 venv:        ${C_INFO}source ${VENV_DIR}/bin/activate${C_END}"
-if [[ $COPY_CONFIG -eq 0 ]]; then
-  echo "  2) 复制配置模板:     ${C_INFO}./install.sh --copy-config${C_END}"
-  echo "                       (或手动 cp config/*.yaml.example config/*.yaml)"
-fi
-echo "  3) 编辑配置:         ${C_INFO}vi .env${C_END}                     # 填 MQTT/钉钉/ADMIN_TOKEN"
-echo "                       ${C_INFO}vi config/runtime.yaml${C_END}      # 填 dock_sn"
-echo "                       ${C_INFO}vi config/dingtalk_robots.yaml${C_END}"
-echo "  4) 试运行 (帮助):    ${C_INFO}python -m dock_guard --help${C_END}"
-echo "  5) 离线回放验证:     ${C_INFO}python -m dock_guard --replay \\${C_END}"
-echo "                       ${C_INFO}  ../sim_dji_cloud_service/sim_dji_cloud/recordings/8UUXN7N00A0GAA_20260605-165145/${C_END}"
+echo "  2) 编辑 .env:        ${C_INFO}vi .env${C_END}                     # 填 DINGTALK_BOT_* (line 15-16)"
+echo "  3) 编辑 runtime.yaml:${C_INFO}vi config/runtime.yaml${C_END}      # 填 subscriptions[0].dock_sn"
+echo "  4) 启动:             ${C_INFO}./run.sh replay${C_END}             # 离线回放验证 (背景跑, 看 ./logs/)"
+echo "                       ${C_INFO}./run.sh live${C_END}               # 真 / sim broker 实时订阅"
+echo "                       ${C_INFO}./run.sh help${C_END}               # 全部命令"
+echo "  5) 前台调试:         ${C_INFO}python -m dock_guard --help${C_END}"
 echo

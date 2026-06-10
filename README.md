@@ -38,49 +38,39 @@ DJI 大疆机场 3 飞行安全评估与告警系统。
 前提：钉钉自定义机器人已建好（加签模式），手头有 webhook URL + sign 密钥。
 
 ```bash
-# 1) 装包 + 复制配置模板
-./install.sh --copy-config
+# 1) 装包 (默认顺手 cp *.yaml.example *.yaml 与 .env.example .env, 不覆盖已有)
+./install.sh
 source .venv/bin/activate
 
-# 2) 编辑 .env，填两段关键值
-#    - DINGTALK_BOT_WEBHOOK_PRIMARY  (line 15)  ← 粘贴 webhook URL
-#    - DINGTALK_BOT_SECRET_PRIMARY   (line 16)  ← 粘贴加签密钥 (SEC 开头)
-#    sim 模式下 MQTT_USERNAME / MQTT_PASSWORD 可填占位符 (例如 "x" / "x"),
-#    mosquitto 不开 auth.
+# 2) 编辑 .env 的两段钉钉值 (line 15 webhook URL, line 16 SEC... 密钥)
 vi .env
 
-# 3) 改 config/runtime.yaml: broker_url 用 sim 的本地 mosquitto, TLS 关
-#    mqtt:
-#      broker_url:  tcp://localhost:1883
-#      tls:
-#        enabled:   false
-#    subscriptions:
-#      - dock_sn: 8UUXN7N00A0GAA   (示例录制样本)
-#        enabled: true
+# 3) 改 config/runtime.yaml 的 subscriptions[0].dock_sn 为 8UUXN7N00A0GAA
+#    (sim 模式可顺手把 broker_url 改为 tcp://localhost:1883 + tls.enabled: false)
 vi config/runtime.yaml
 
-# 4) (另一终端) 起本地 mosquitto + sim 播一段录制
-#    详见 ../sim_dji_cloud_service/2026-05-21-sim-dji-cloud-operations-manual.md §5
+# 4) 离线回放验证 (后台启动, 不依赖 broker, 最快)
+./run.sh replay                      # 默认目录 + 倍速 0
+./run.sh logs replay                 # 看进度
+
+# 5) 切实时模式 (sim broker 或真 broker, 由 .env 决定)
+./run.sh live
+./run.sh status                      # 看后台状态
+./run.sh stop live                   # 优雅停止 (SIGTERM -> graceful)
+```
+
+`./run.sh help` 看全部命令。前台调试不走 `run.sh`，直接 `python -m dock_guard ...` 看 stdout。
+
+sim 模式 broker 启动（另一终端）：
+
+```bash
 mosquitto -p 1883 &
 cd ../sim_dji_cloud_service
 sim-dji play sim_dji_cloud/recordings/8UUXN7N00A0GAA_20260605-165145 \
     --mqtt-url tcp://localhost:1883 --speed 1.0
-
-# 5) 启动 dock_guard
-python -m dock_guard
-# 看 stdout 摘要包含 'dingtalk = ["ops-primary"]'.
-# 录制中触发 emergency_stop / wind_exceeded / heavy_rain 等规则时,
-# 钉钉群应收到带 [BLOCK]/[RETURN] 前缀的 Markdown 卡片,
-# data/alerts.jsonl 同步落 DISPATCHED 行.
 ```
 
-切换真 broker：改 `.env` 的 `MQTT_BROKER_URL / USERNAME / PASSWORD`，重启 `python -m dock_guard`（环境变量不热更，§15.10）。
-
-离线回放（不需要 broker，最快验证规则与告警链路是否走通）：
-
-```bash
-python -m dock_guard --replay $(pwd)/../sim_dji_cloud_service/sim_dji_cloud/recordings/8UUXN7N00A0GAA_20260605-165145/
-```
+切换真 broker：改 `.env` 的 `MQTT_BROKER_URL / USERNAME / PASSWORD`，`./run.sh stop live && ./run.sh live` 重启（环境变量不热更，§15.10）。
 
 Docker：
 
@@ -88,7 +78,7 @@ Docker：
 docker compose up -d dock_guard
 ```
 
-更多脚本选项：`./install.sh --help`；配置详见设计文档 §15「配置文件总览」。
+更多脚本选项：`./install.sh --help` / `./run.sh help`；配置详见设计文档 §15「配置文件总览」。
 
 ## 兄弟服务
 
