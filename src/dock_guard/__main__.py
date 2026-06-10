@@ -56,14 +56,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--config-dir",
         type=Path,
-        default=Path("/app/config"),
-        help="配置目录, 默认 /app/config",
+        default=None,
+        help="配置目录, 默认: /app/config 存在则用 (docker), 否则用 ./config (本机)",
     )
     p.add_argument(
         "--data-dir",
         type=Path,
-        default=Path("/app/data"),
-        help="数据 (jsonl/snapshot) 目录, 默认 /app/data",
+        default=None,
+        help="数据 (jsonl/snapshot) 目录, 默认: /app/data 存在则用 (docker), 否则用 ./data",
     )
 
     p.add_argument("--enable-hot-reload", action="store_true",
@@ -80,14 +80,29 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _resolve_dir(user_arg: Path | None, container: Path, local: Path) -> Path:
+    """优先级: --user 显式参数 > /app/<x> (docker 容器内) > ./<x> (本机 cwd).
+
+    `user_arg=None` 表示用户没传 --config-dir/--data-dir, 走自动检测.
+    """
+    if user_arg is not None:
+        return user_arg.resolve()
+    if container.exists():
+        return container
+    return local.resolve()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    config_dir = _resolve_dir(args.config_dir, Path("/app/config"), Path("./config"))
+    data_dir = _resolve_dir(args.data_dir, Path("/app/data"), Path("./data"))
+
     print(f"dock_guard {__version__}  [Phase 1: config loaded]")
     print()
-    print(f"  config_dir         = {args.config_dir}")
-    print(f"  data_dir           = {args.data_dir}")
+    print(f"  config_dir         = {config_dir}")
+    print(f"  data_dir           = {data_dir}")
     print(f"  log_level          = {args.log_level}")
     if args.replay:
         print(f"  mode               = REPLAY ({args.replay})")
@@ -103,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Phase 1: 加载并汇总配置.
     try:
-        cfg = load_app_config(args.config_dir)
+        cfg = load_app_config(config_dir)
     except FileNotFoundError as e:
         print(f"config error: {e}", file=sys.stderr)
         return 2
@@ -132,10 +147,12 @@ def main(argv: list[str] | None = None) -> int:
 
     # ── Phase 2-6: --replay 跑 ReplaySource + Aggregator ──────────
     if args.replay:
-        return asyncio.run(_run_replay(args.replay, speed=args.replay_speed, cfg=cfg))
+        return asyncio.run(_run_replay(
+            args.replay, speed=args.replay_speed, cfg=cfg, data_dir=data_dir
+        ))
 
     # ── Phase 7: LIVE = 订 MQTT broker ─────────────────────────────
-    return asyncio.run(_run_live(cfg))
+    return asyncio.run(_run_live(cfg, data_dir=data_dir))
 
 
 def _build_notification_bus(cfg: AppConfig) -> NotificationBus | None:
@@ -152,7 +169,7 @@ def _build_notification_bus(cfg: AppConfig) -> NotificationBus | None:
     return NotificationBus(channels, router)
 
 
-async def _run_live(cfg: AppConfig) -> int:
+async def _run_live(cfg: AppConfig, *, data_dir: Path = Path("data")) -> int:
     """M1 LIVE 模式: 订真实 MQTT broker -> Aggregator -> Rules ->
     AlertCoordinator -> NotificationBus -> DingTalkChannel.
     永远跑直到 Ctrl-C / SIGTERM.
@@ -184,7 +201,8 @@ async def _run_live(cfg: AppConfig) -> int:
     bus = _build_notification_bus(cfg)
     coordinator: AlertCoordinator | None = None
     if engine is not None:
-        alerts_path = Path("data") / "alerts.jsonl"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        alerts_path = data_dir / "alerts.jsonl"
         coordinator = AlertCoordinator(
             cfg, sink=JsonlAlertSink(alerts_path), bus=bus
         )
@@ -216,7 +234,10 @@ async def _run_live(cfg: AppConfig) -> int:
     return 0
 
 
-async def _run_replay(recording_dir: Path, *, speed: float, cfg: AppConfig) -> int:
+async def _run_replay(
+    recording_dir: Path, *, speed: float, cfg: AppConfig,
+    data_dir: Path = Path("data"),
+) -> int:
     """Phase 3 验证模式: 跑 ReplaySource 喂 Aggregator, 打印 envelope 分布 + phase 时间线."""
     try:
         src = ReplaySource(recording_dir, speed=speed)
@@ -242,9 +263,8 @@ async def _run_replay(recording_dir: Path, *, speed: float, cfg: AppConfig) -> i
 
     coordinator: AlertCoordinator | None = None
     if engine is not None:
-        # Phase 5: data_dir/alerts.jsonl
-        from pathlib import Path as _P
-        alerts_path = _P("data") / "alerts.jsonl"   # 相对 cwd; 生产由 docker volume 注入
+        data_dir.mkdir(parents=True, exist_ok=True)
+        alerts_path = data_dir / "alerts.jsonl"
         coordinator = AlertCoordinator(cfg, sink=JsonlAlertSink(alerts_path))
 
     counts: Counter[TopicKey] = Counter()
