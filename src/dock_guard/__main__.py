@@ -221,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
         http_host=args.http_host,
         http_port=args.http_port,
         http_enabled=not args.no_http,
+        config_dir=config_dir,
     ))
 
 
@@ -246,6 +247,7 @@ async def _run_live(
     http_host: str = "127.0.0.1",
     http_port: int = 8081,
     http_enabled: bool = True,
+    config_dir: Path | None = None,
 ) -> int:
     """M1 LIVE 模式: 订真实 MQTT broker -> Aggregator -> Rules ->
     AlertCoordinator -> NotificationBus -> DingTalkChannel.
@@ -298,7 +300,13 @@ async def _run_live(
     if http_enabled and admin_token is not None:
         event_bus = EventBus()
         http_state = HttpState(
-            admin_token=admin_token, replay_mode=False, event_bus=event_bus
+            admin_token=admin_token,
+            replay_mode=False,
+            event_bus=event_bus,
+            # B4 admin endpoints 需要这三个引用直接读写下游
+            coordinator=coordinator,
+            engine=engine,
+            config_dir=config_dir,
         )
         app = build_app(http_state)
         http_server, http_task = await start_http_server(
