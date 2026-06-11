@@ -24,7 +24,10 @@ SEVERITY_BADGE: dict[Severity, str] = {
     Severity.INFO: "⚪",
 }
 
-DINGTALK_TIMEOUT_S = 5.0
+# 钉钉端点 oapi.dingtalk.com 国内访问偶尔慢, 5s 偏紧;
+# 10s 既能容忍 LAN 抖动, 又不至于让 graceful shutdown 卡太久.
+# (broadxt 真实环境 2026-06-11 ConnectTimeout 后调整.)
+DINGTALK_TIMEOUT_S = 10.0
 
 
 def sign_dingtalk_url(base_url: str, secret: str, timestamp_ms: int) -> str:
