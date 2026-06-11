@@ -13,10 +13,12 @@ level_routing_defaults:
     channels: [panel, webhook, dingtalk]
   return:
     channels: [panel, webhook, dingtalk]
+  # ⚠️ demo 模式: WARN / INFO 也走钉钉, 让钉钉群常有告警可观察.
+  # 上线前还原 warn -> [panel, webhook], info -> [panel] 以减少噪声.
   warn:
-    channels: [panel, webhook]            # DingTalk 默认关
+    channels: [panel, webhook, dingtalk]   # orig: [panel, webhook]
   info:
-    channels: [panel]                      # 仅面板
+    channels: [panel, dingtalk]            # orig: [panel]
 
 # AlertCoordinator cooldown / 合并参数 (设计 §6.3 / §6.4)
 coordinator:

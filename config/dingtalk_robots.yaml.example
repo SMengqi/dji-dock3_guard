@@ -8,7 +8,9 @@ robots:
   - id: ops-primary
     webhook_url:        ${DINGTALK_BOT_WEBHOOK_PRIMARY}
     secret:             ${DINGTALK_BOT_SECRET_PRIMARY}
-    min_severity:       RETURN
+    # ⚠️ demo 模式: 改 INFO 让 WARN / INFO 也能进群;
+    # 上线前还原 min_severity: RETURN 以减少噪声.
+    min_severity:       INFO            # orig: RETURN
     rate_limit_per_min: 18              # 钉钉官方上限 20/min, 留 2 条余量
     repeat_emergency:   true             # EMERGENCY 重复 2 次 (间隔 30s)
     at_all_on_emergency: true
