@@ -65,6 +65,8 @@ class Notification:
                 "phase_when_fired": v.phase_when_fired.value,
                 "facts": dict(v.facts),
                 "thresholds": dict(v.thresholds),
+                "rule_id": v.rule_id,
+                "desc": v.desc,
             },
         )
 

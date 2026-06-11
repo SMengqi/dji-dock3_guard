@@ -190,6 +190,7 @@ class RuleEngine:
             ts_ms=frame.recv_ts_ms,
             dedup_key=f"{rule.id}#{frame.recv_ts_ms // 1000}",
             cooldown_ms_override=rule.cooldown_ms,
+            desc=rule.desc,
         )
 
 

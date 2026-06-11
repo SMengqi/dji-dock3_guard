@@ -70,20 +70,53 @@ class TestSignDingtalkUrl:
 
 
 class TestFormatMarkdown:
-    def test_includes_severity_badge(self) -> None:
+    def test_includes_severity_badge_and_cn(self) -> None:
         _, text = format_markdown(_notif(Severity.EMERGENCY))
         assert "🔴" in text
-        assert "[EMERGENCY]" in text
+        assert "紧急" in text   # SEVERITY_CN[EMERGENCY]
+        assert "TEST" in text   # code 兜底显示在标题
 
-    def test_includes_dock_phase(self) -> None:
+    def test_includes_dock_phase_translated(self) -> None:
         _, text = format_markdown(_notif())
         assert "DOCK1" in text
-        assert "CRUISE" in text
+        assert "巡航中" in text   # PHASE_CN[CRUISE]
+        assert "CRUISE" in text   # 原文括号里保留
 
-    def test_includes_suggested_action(self) -> None:
+    def test_includes_suggested_action_translated(self) -> None:
         _, text = format_markdown(_notif())
-        assert "notify" in text
+        # _notif() 默认 suggested_action='notify' -> ACTION_CN
+        assert "仅记录" in text
         assert "本系统不下发指令" in text
+
+    def test_includes_rule_id_and_code_footer(self) -> None:
+        _, text = format_markdown(_notif())
+        assert "告警代码" in text
+        assert "TEST" in text   # code 在 footer
+
+    def test_threshold_paren_when_present(self) -> None:
+        """有阈值时显示 `fact = v（阈值 thr）` + desc / rule_id 入卡片."""
+        from dock_guard.notify.notification import Notification
+        n = Notification(
+            id="n", ts_ms=1, source="t",
+            severity=Severity.BLOCK,
+            code="DEMO",
+            title="t", summary="s",
+            context={"dock_sn": "D", "phase": "PREFLIGHT"},
+            suggested_action="reject_takeoff",
+            dedup_key="d",
+            verdict_payload={
+                "facts": {"wind_gust_max_30s": 6.5},
+                "thresholds": {"wind_gust_max_30s": ">3.0"},
+                "desc": "起飞前阵风窗口峰值超阈值",
+                "rule_id": "preflight.wind_exceeded",
+            },
+        )
+        _, text = format_markdown(n)
+        assert "起飞前阵风窗口峰值超阈值" in text
+        assert "起飞前" in text
+        assert "拒绝起飞" in text
+        assert "阈值" in text and ">3.0" in text
+        assert "preflight.wind_exceeded" in text
 
 
 def _make_robot(**kwargs) -> DingTalkRobot:

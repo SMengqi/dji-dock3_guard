@@ -233,11 +233,13 @@ async def test_emergency_stop_pressed_drives_dingtalk(tmp_path: pathlib.Path) ->
         f"sign 不一致: got={received_sign} expected={expected}"
     )
 
-    # ── 断言 3: Markdown 卡片含 verdict code ──────────────────────
+    # ── 断言 3: Markdown 卡片含 verdict code + 中文描述 ───────────
     body = json.loads(req.content)
     assert body["msgtype"] == "markdown"
     assert "PREFLIGHT_EMERGENCY_STOP_PRESSED" in body["markdown"]["text"]
-    assert body["markdown"]["title"].startswith("[BLOCK]")
+    # 标题被中文化为 `[拦阻] 机场急停按钮按下 @<dock_sn>` 形式
+    assert body["markdown"]["title"].startswith("[拦阻]")
+    assert "机场急停按钮按下" in body["markdown"]["title"]
 
     # ── 断言 4: alerts.jsonl 落了 DISPATCHED 行, channels.dingtalk.sent=True ──
     assert alerts_path.exists()

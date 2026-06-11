@@ -25,6 +25,7 @@ class Verdict:
     ts_ms: int
     dedup_key: str
     cooldown_ms_override: int | None = None    # 规则级 cooldown_ms 覆盖, 由 engine 填
+    desc: str = ""                              # 规则 desc 中文描述, 让钉钉卡片人话化
 
     @property
     def severity_name(self) -> str:
