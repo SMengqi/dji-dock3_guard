@@ -42,9 +42,14 @@ DEFAULT_REPLAY_SPEED="0"
 # python -m dock_guard 的额外参数 (config-dir / data-dir 一般走自动检测, 不必填)
 EXTRA_ARGS=""
 
-# HTTP 控制面 (与 _run_live 的 --http-host / --http-port 默认对齐)
-HTTP_HOST="127.0.0.1"
-HTTP_PORT="8081"
+# HTTP 控制面: 默认从 .env 读 HTTP_HOST / HTTP_PORT, 缺失则用硬编码兜底.
+# 保证 python 端 --http-port 解析与 run.sh admin 客户端拼 URL 用同一个值.
+_env_get() {
+  [ -f .env ] || { echo ""; return; }
+  grep -oP "^$1=\K[^[:space:]#]+" .env | head -1
+}
+HTTP_HOST="$(_env_get HTTP_HOST)"; HTTP_HOST="${HTTP_HOST:-127.0.0.1}"
+HTTP_PORT="$(_env_get HTTP_PORT)"; HTTP_PORT="${HTTP_PORT:-8081}"
 
 # ==================================================================
 

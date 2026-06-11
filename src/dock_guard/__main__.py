@@ -83,10 +83,14 @@ def build_parser() -> argparse.ArgumentParser:
                    help="所有 HTTP 端点强制鉴权 (默认仅 /admin/*)")
 
     # Stage 2: HTTP 控制面 (设计 §7.2 + §8 + §9.3)
-    p.add_argument("--http-host", default="127.0.0.1",
-                   help="HTTP 控制面监听地址, 默认 127.0.0.1 (本机); 0.0.0.0 外开")
-    p.add_argument("--http-port", type=int, default=8081,
-                   help="HTTP 控制面监听端口, 默认 8081")
+    # 默认值优先级: --http-host / --http-port (CLI) > .env (HTTP_HOST / HTTP_PORT)
+    #             > 硬编码 (127.0.0.1 / 8081); main() 中按此顺序 resolve.
+    p.add_argument("--http-host", default=None,
+                   help="HTTP 控制面监听地址 (覆盖 .env HTTP_HOST); "
+                        "默认 .env HTTP_HOST 或 127.0.0.1")
+    p.add_argument("--http-port", type=int, default=None,
+                   help="HTTP 控制面监听端口 (覆盖 .env HTTP_PORT); "
+                        "默认 .env HTTP_PORT 或 8081")
     p.add_argument("--no-http", action="store_true",
                    help="禁用 HTTP 控制面 (跳过 ADMIN_TOKEN 校验, /healthz 不可用)")
 
@@ -214,15 +218,31 @@ def main(argv: list[str] | None = None) -> int:
             args.replay, speed=args.replay_speed, cfg=cfg, data_dir=data_dir
         ))
 
+    # HTTP host/port 三层解析: args > .env > 硬编码
+    effective_http_host = args.http_host or os.environ.get("HTTP_HOST") or "127.0.0.1"
+    effective_http_port = args.http_port or _parse_port_env(
+        os.environ.get("HTTP_PORT")
+    ) or 8081
+
     # ── Phase 7+Stage 2: LIVE = 订 MQTT broker + HTTP 控制面 ───────
     return asyncio.run(_run_live(
         cfg, data_dir=data_dir,
         admin_token=admin_token,
-        http_host=args.http_host,
-        http_port=args.http_port,
+        http_host=effective_http_host,
+        http_port=effective_http_port,
         http_enabled=not args.no_http,
         config_dir=config_dir,
     ))
+
+
+def _parse_port_env(val: str | None) -> int | None:
+    """str -> int, 容错: 空 / 非数字 -> None 让上游用 fallback."""
+    if not val:
+        return None
+    val = val.strip()
+    if not val.isdigit():
+        return None
+    return int(val)
 
 
 def _build_notification_bus(cfg: AppConfig) -> NotificationBus | None:
