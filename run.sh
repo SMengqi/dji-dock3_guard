@@ -42,6 +42,10 @@ DEFAULT_REPLAY_SPEED="0"
 # python -m dock_guard 的额外参数 (config-dir / data-dir 一般走自动检测, 不必填)
 EXTRA_ARGS=""
 
+# HTTP 控制面 (与 _run_live 的 --http-host / --http-port 默认对齐)
+HTTP_HOST="127.0.0.1"
+HTTP_PORT="8081"
+
 # ==================================================================
 
 LOG_DIR="logs"
@@ -113,6 +117,106 @@ status() {
 
 usage() {
   sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+  cat <<'EOF'
+
+admin 子命令 (Stage 2 控制面, 走 .env 的 ADMIN_TOKEN):
+  admin mutes                            列出当前静默状态
+  admin mute <dock_sn> [duration_s]      设 per-dock 静默 (默认永久)
+  admin unmute <dock_sn>                 解除 per-dock 静默
+  admin global_mute [reason]             开全局静默
+  admin global_unmute                    解除全局静默
+  admin reload                           重读 config/rules.yaml -> 热替规则
+  admin events                           SSE 流式订阅 (Ctrl-C 退出)
+  admin health                           GET /healthz + /readyz
+EOF
+}
+
+# ── admin: 从 .env 抽 token + 通用 curl wrapper ───────────────────
+_admin_token() {
+  if [ ! -f .env ]; then
+    echo "[run] .env 不存在; 先 ./install.sh 或 cp .env.example .env" >&2
+    return 2
+  fi
+  local t
+  t=$(grep -oP '^ADMIN_TOKEN=\K[A-Fa-f0-9]+' .env | head -1)
+  if [ -z "$t" ]; then
+    echo "[run] .env 里没找到 ADMIN_TOKEN= 行 (必须是 hex)" >&2
+    return 2
+  fi
+  echo "$t"
+}
+
+_admin_url() {
+  echo "http://${HTTP_HOST}:${HTTP_PORT}$1"
+}
+
+_admin_curl() {
+  local token method path data
+  token="$(_admin_token)" || exit 2
+  method="$1"; path="$2"; data="${3:-}"
+  if [ -n "$data" ]; then
+    curl -sS -X "$method" \
+      -H "Authorization: Bearer $token" \
+      -H "Content-Type: application/json" \
+      -d "$data" \
+      "$(_admin_url "$path")"
+  else
+    curl -sS -X "$method" \
+      -H "Authorization: Bearer $token" \
+      "$(_admin_url "$path")"
+  fi
+  echo   # curl 不 trailing newline
+}
+
+admin_subcommand() {
+  local sub="${1:-}"; shift || true
+  case "$sub" in
+    mutes)
+      _admin_curl GET /admin/mutes | python -m json.tool
+      ;;
+    mute)
+      local dock="${1:?用法: ./run.sh admin mute <dock_sn> [duration_s]}"
+      local dur="${2:-0}"
+      _admin_curl POST "/admin/mute/$dock" \
+        "{\"enabled\":true,\"duration_s\":${dur}}" | python -m json.tool
+      ;;
+    unmute)
+      local dock="${1:?用法: ./run.sh admin unmute <dock_sn>}"
+      _admin_curl POST "/admin/mute/$dock" \
+        '{"enabled":false}' | python -m json.tool
+      ;;
+    global_mute)
+      local reason="${1:-manual}"
+      _admin_curl POST /admin/global_mute \
+        "{\"enabled\":true,\"reason\":\"${reason}\"}" | python -m json.tool
+      ;;
+    global_unmute)
+      _admin_curl POST /admin/global_mute \
+        '{"enabled":false}' | python -m json.tool
+      ;;
+    reload)
+      _admin_curl POST /admin/reload-rules | python -m json.tool
+      ;;
+    events)
+      local token
+      token="$(_admin_token)" || exit 2
+      # -N: 不缓冲, SSE 流就要立刻看到帧.
+      exec curl -N -H "Authorization: Bearer $token" "$(_admin_url /events)"
+      ;;
+    health)
+      echo "--- /healthz ---"
+      curl -sS "$(_admin_url /healthz)"; echo
+      echo "--- /readyz ---"
+      curl -sS -w "\n[HTTP %{http_code}]\n" "$(_admin_url /readyz)"
+      ;;
+    ""|help|-h|--help)
+      sed -n '/^admin 子命令/,/^EOF$/p' <(usage)
+      ;;
+    *)
+      echo "未知 admin 子命令: $sub" >&2
+      exit 1
+      ;;
+  esac
 }
 
 mode="${1:-}"
@@ -143,6 +247,9 @@ case "$mode" in
     ;;
   logs)
     tail -f "$LOG_DIR/${1:?用法: ./run.sh logs <模式>}-latest.log"
+    ;;
+  admin)
+    admin_subcommand "$@"
     ;;
   ""|-h|--help|help)
     usage

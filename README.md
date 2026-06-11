@@ -20,7 +20,7 @@ DJI 大疆机场 3 飞行安全评估与告警系统。
 每个 Stage = 一个可对外演示的产品能力（不是按代码模块）。详见设计文档 §11.0。
 
 - [x] **Stage 1 — 实时告警最小闭环** ✅（2026-06-10 真实环境验证）：订真 broker / sim broker → 阶段机识别 → 规则触发 → 钉钉收到 `[BLOCK]/[RETURN]` 卡片 → `alerts.jsonl` 落 DISPATCHED；含 `run.sh` 后台运维 + SIGTERM graceful + sim 联调 + 真 broker 切换。涵盖 24 个 commit `a2678cc → fc1c638`。
-- [ ] **Stage 2 — 运维控制台**（进行中，2026-06-09 选定）：FastAPI + Panel SSE + ADMIN_TOKEN 鉴权；操作员浏览器看 phase / 告警时间线，点 mute / 全局静默 / 热更规则不重启。涉及 §7.2 + §8 + §10。
+- [x] **Stage 2 — 运维控制台** ✅（2026-06-10 真实环境验证）：FastAPI + Panel SSE + ADMIN_TOKEN 鉴权；`/healthz` `/readyz` `/events`（SSE 推 alert + phase_transition）`/admin/mute/{dock_sn}` `/admin/global_mute` `/admin/mutes` `/admin/reload-rules`；`./run.sh admin <subcmd>` 一行 curl 包装。涉及 §7.2 + §8 + §9.3 + §10.1 + §10.5。
 - [ ] Stage 3+ — 后续候选池：B 多机场 / C 告警精度 / D 工程化验收 / E 离线复盘骨架 / F-H 三个离线分析器。详见设计文档 §11.0.3。
 
 ## M1 快速启动（sim 联调，30 秒跑通）
@@ -51,11 +51,19 @@ vi .env
 ./run.sh status                      # 看后台状态
 ./run.sh stop live                   # 优雅停止 (SIGTERM -> graceful)
 
-# 5) HTTP 控制面 (Stage 2)
-curl http://localhost:8081/healthz                                                   # 200 永远
-curl http://localhost:8081/readyz                                                    # 200 当 broker 通 + 收到首帧 OSD
-curl -H "Authorization: Bearer $(grep ^ADMIN_TOKEN .env | cut -d= -f2)" \
-     http://localhost:8081/docs                                                      # FastAPI Swagger
+# 5) HTTP 控制面 (Stage 2) — 直接走 ./run.sh admin 子命令
+./run.sh admin health                                          # /healthz + /readyz
+./run.sh admin events                                          # SSE 流: alert + phase_transition (Ctrl-C 退)
+./run.sh admin mutes                                           # 查当前静默
+./run.sh admin mute 8UUXN7N00A0GAA 3600                        # 静默该 dock 1 小时
+./run.sh admin unmute 8UUXN7N00A0GAA                           # 解除
+./run.sh admin global_mute "off-hours"                         # 全局静默
+./run.sh admin global_unmute
+./run.sh admin reload                                          # 重读 config/rules.yaml 热替规则
+
+# 原始 curl 也可以 (TOKEN 从 .env 抽 hex):
+TOKEN=$(grep -oP '^ADMIN_TOKEN=\K[A-Fa-f0-9]+' .env | head -1)
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8081/docs    # FastAPI Swagger
 ```
 
 `./run.sh help` 看全部命令。前台调试不走 `run.sh`，直接 `python -m dock_guard ...` 看 stdout。
