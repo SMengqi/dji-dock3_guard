@@ -44,12 +44,17 @@ EXTRA_ARGS=""
 
 # HTTP 控制面: 默认从 .env 读 HTTP_HOST / HTTP_PORT, 缺失则用硬编码兜底.
 # 保证 python 端 --http-port 解析与 run.sh admin 客户端拼 URL 用同一个值.
+# 注: set -e + pipefail 下 grep 无匹配会返非零, 这里全部 || true 兜底,
+# 否则用户 .env 没加这两行就会让 run.sh 整个静默退出.
 _env_get() {
-  [ -f .env ] || { echo ""; return; }
-  grep -oP "^$1=\K[^[:space:]#]+" .env | head -1
+  local val=""
+  if [ -f .env ]; then
+    val=$(grep -oP "^$1=\K[^[:space:]#]+" .env 2>/dev/null | head -1 || true)
+  fi
+  printf '%s' "$val"
 }
-HTTP_HOST="$(_env_get HTTP_HOST)"; HTTP_HOST="${HTTP_HOST:-127.0.0.1}"
-HTTP_PORT="$(_env_get HTTP_PORT)"; HTTP_PORT="${HTTP_PORT:-8081}"
+HTTP_HOST="$(_env_get HTTP_HOST || true)"; HTTP_HOST="${HTTP_HOST:-127.0.0.1}"
+HTTP_PORT="$(_env_get HTTP_PORT || true)"; HTTP_PORT="${HTTP_PORT:-8081}"
 
 # ==================================================================
 
