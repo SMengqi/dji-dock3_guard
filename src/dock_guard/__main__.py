@@ -19,7 +19,6 @@ from dock_guard import __version__
 from dock_guard.aggregator import DockAggregator
 from dock_guard.config import AppConfig, MissingEnvVarError, load_app_config
 from dock_guard.coordinator import AlertCoordinator, Decision, JsonlAlertSink
-from dock_guard.ingest import MqttSource, ReplaySource, TlsSchemeMismatch
 from dock_guard.http import (
     EventBus,
     HttpState,
@@ -28,6 +27,7 @@ from dock_guard.http import (
     load_admin_token,
     start_http_server,
 )
+from dock_guard.ingest import MqttSource, ReplaySource, TlsSchemeMismatch
 from dock_guard.notify import DingTalkChannel, NotificationBus, Router
 from dock_guard.rules import RuleEngine
 from dock_guard.types import ChannelKind, Severity, TopicKey
@@ -312,7 +312,7 @@ async def _run_live(
         )
 
     # Stage 2: HTTP 控制面 (与 ingest 同 event loop).
-    import uvicorn as _uvicorn   # 仅类型提示
+    import uvicorn as _uvicorn  # 仅类型提示
     http_server: _uvicorn.Server | None = None
     http_task: asyncio.Task[None] | None = None
     http_state: HttpState | None = None
@@ -391,7 +391,7 @@ async def _run_live(
             http_server.should_exit = True
             try:
                 await asyncio.wait_for(http_task, timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 http_task.cancel()
         if coordinator is not None:
             coordinator.close()

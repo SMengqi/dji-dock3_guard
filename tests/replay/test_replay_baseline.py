@@ -77,7 +77,7 @@ class TestReplayBaseline:
         assert len(cur) == len(base), (
             f"phase_transitions 数量不一致: 当前 {len(cur)} vs baseline {len(base)}"
         )
-        for i, (c, b) in enumerate(zip(cur, base)):
+        for i, (c, b) in enumerate(zip(cur, base, strict=False)):
             assert c == b, (
                 f"phase_transitions[{i}] 不一致:\n"
                 f"  当前:    {c}\n"
@@ -93,7 +93,7 @@ class TestReplayBaseline:
             f"verdicts 数量不一致: 当前 {len(cur)} vs baseline {len(base)}\n"
             "如果是有意改 rules/aggregator: 跑 python scripts/regen_replay_baseline.py"
         )
-        for i, (c, b) in enumerate(zip(cur, base)):
+        for i, (c, b) in enumerate(zip(cur, base, strict=False)):
             assert c == b, (
                 f"verdicts[{i}] 不一致:\n"
                 f"  当前:    {c}\n"
@@ -110,7 +110,7 @@ class TestReplayBaseline:
             "如果是有意改 coordinator (cooldown/dedup/mute): "
             "跑 python scripts/regen_replay_baseline.py"
         )
-        for i, (c, b) in enumerate(zip(cur, base)):
+        for i, (c, b) in enumerate(zip(cur, base, strict=False)):
             assert c == b, (
                 f"alert_decisions[{i}] 不一致:\n"
                 f"  当前:    {c}\n"

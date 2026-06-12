@@ -15,7 +15,6 @@ from dock_guard.http.app import build_app
 from dock_guard.http.state import HttpState
 from dock_guard.rules import RuleEngine
 
-
 _GOOD_ENV = {
     "MQTT_BROKER_URL": "tcp://test:1883",
     "MQTT_USERNAME": "u", "MQTT_PASSWORD": "p",

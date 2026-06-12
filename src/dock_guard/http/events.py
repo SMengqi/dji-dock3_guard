@@ -98,7 +98,7 @@ async def _sse_stream(
                     item = await asyncio.wait_for(
                         queue.get(), timeout=_KEEPALIVE_INTERVAL_S
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     if await request.is_disconnected():
                         return
                     yield ": keepalive\n\n"

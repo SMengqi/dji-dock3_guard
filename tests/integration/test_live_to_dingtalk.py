@@ -32,7 +32,6 @@ from dock_guard.notify import DingTalkChannel, NotificationBus, Router
 from dock_guard.rules import RuleEngine
 from dock_guard.types import ChannelKind
 
-
 # ── 配置 fixture ──────────────────────────────────────────────────
 
 

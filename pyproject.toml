@@ -54,7 +54,16 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "RUF"]
-ignore = ["E501"]
+ignore = [
+    "E501",
+    # ASYNC240: pathlib in async fn. 我们 _run_live 里只做 mkdir / Path 算术,
+    # 都是微秒级同步操作, 不需要 trio.Path / anyio.path 的额外依赖.
+    "ASYNC240",
+    # RUF001 / RUF002: 中文全角括号 ( ) vs 半角 ( ). 钉钉卡片里中文混排
+    # 全角更好看, 是设计选择不是 typo.
+    "RUF001",
+    "RUF002",
+]
 
 [tool.mypy]
 python_version = "3.12"

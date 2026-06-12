@@ -9,13 +9,11 @@ from __future__ import annotations
 import asyncio
 import json
 
-import httpx
 from fastapi.testclient import TestClient
 
 from dock_guard.http.app import build_app
 from dock_guard.http.events import EventBus, _format_sse
 from dock_guard.http.state import HttpState
-
 
 # ─── EventBus 行为 ────────────────────────────────────────────────
 
@@ -67,7 +65,7 @@ class TestFormatSse:
         assert out.startswith("event: alert\n")
         assert "data: " in out
         assert out.endswith("\n\n")
-        data_line = next(l for l in out.split("\n") if l.startswith("data: "))
+        data_line = next(ln for ln in out.split("\n") if ln.startswith("data: "))
         assert json.loads(data_line[6:]) == {"code": "PREFLIGHT_X"}
 
     def test_unicode_preserved(self) -> None:

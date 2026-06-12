@@ -24,9 +24,9 @@ class HttpState:
     mqtt_connected: bool = False
     seen_first_osd: bool = False
     replay_mode: bool = False
-    event_bus: "EventBus | None" = None
+    event_bus: EventBus | None = None
     # B4 admin endpoints 需要回写这三个引用; _run_live 构造完
     # coordinator / engine 后赋值, 早期 None 不影响 HTTP 启动.
-    coordinator: "AlertCoordinator | None" = None
-    engine: "RuleEngine | None" = None
+    coordinator: AlertCoordinator | None = None
+    engine: RuleEngine | None = None
     config_dir: Path | None = None

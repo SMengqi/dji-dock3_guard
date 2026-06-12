@@ -109,7 +109,7 @@ def register_admin(router: APIRouter, state: HttpState) -> None:
             "global": _mute_to_dict(coord.mute.get_global_mute()),
             "docks": {
                 sn: _mute_to_dict(entry)
-                for sn, entry in coord.mute._dock_mutes.items()   # noqa: SLF001
+                for sn, entry in coord.mute._dock_mutes.items()
             },
         }
 
@@ -129,7 +129,7 @@ def register_admin(router: APIRouter, state: HttpState) -> None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"reload failed: {type(e).__name__}: {e}",
-            )
+            ) from e
         old_count = sum(1 for _ in engine.rules.all_rules())
         new_count = sum(1 for _ in new_rules.all_rules())
         engine.rules = new_rules

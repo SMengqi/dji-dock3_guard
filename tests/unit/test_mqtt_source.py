@@ -111,7 +111,7 @@ class TestTlsSchemeConsistency:
             tmp_path, broker_url="tcp://localhost:1883", tls_enabled=True
         )
         src = MqttSource(cfg)
-        with pytest.raises(TlsSchemeMismatch, match="tls.enabled=true.*与.*scheme"):
+        with pytest.raises(TlsSchemeMismatch, match=r"tls.enabled=true.*与.*scheme"):
             src._default_client_factory()
 
     async def test_tcp_scheme_plus_tls_disabled_ok(

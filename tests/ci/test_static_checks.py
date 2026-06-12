@@ -17,7 +17,6 @@ import re
 import pytest
 import yaml
 
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
 CONFIG_DIR = REPO_ROOT / "config"
