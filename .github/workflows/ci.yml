@@ -1,0 +1,48 @@
+name: ci
+
+# Stage 3-D B4: GitHub Actions CI (设计 §12.4)
+# 跑: tests/unit (核心) + tests/ci (静态强制门) + tests/integration/test_live_to_dingtalk.py (M1 端到端冒烟).
+# 跳: tests/replay (依赖 sim_dji_cloud_service 录制目录, runner 拿不到).
+#
+# replay baseline 仍归本地强制门, PR 提交前自己跑:
+#   python -m pytest tests/replay/
+#   (若 baseline 该 regen, 跑 python scripts/regen_replay_baseline.py 并入 commit)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: |
+          python -m ruff check src tests
+
+      - name: Run tests (unit + ci + smoke)
+        run: |
+          python -m pytest \
+            tests/unit \
+            tests/ci \
+            tests/integration/test_live_to_dingtalk.py \
+            -q --tb=short
