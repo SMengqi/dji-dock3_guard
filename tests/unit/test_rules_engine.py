@@ -283,4 +283,8 @@ class TestCustomFn:
         eng = RuleEngine(rules, agg,
                          custom_fns={CustomFnEnum.is_battery_drop_normal: boom})
         verdicts = eng.evaluate()
-        assert {v.code for v in verdicts} == {"OK"}
+        # Stage 3-D B2: 异常隔离不再静默, 现在自产 1 条 RULE_EVAL_FAILED.
+        # OK 仍来自正常规则 r2; BDR (来自 r1 的炸函数) 仍不产业务 Verdict.
+        codes = {v.code for v in verdicts}
+        assert codes == {"OK", "RULE_EVAL_FAILED"}
+        assert eng.eval_failure_counts.get("r1") == 1

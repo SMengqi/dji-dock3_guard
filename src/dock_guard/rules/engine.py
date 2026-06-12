@@ -16,7 +16,7 @@ from dock_guard.rules.custom_fns import (
 )
 from dock_guard.rules.loader import FactCondition, Rule, RulesYaml
 from dock_guard.rules.verdict import Verdict
-from dock_guard.types import Phase, PhaseSource
+from dock_guard.types import Phase, PhaseSource, Severity
 
 
 @dataclass
@@ -40,12 +40,21 @@ class RuleEngine:
         self.custom_fns = dict(custom_fns)
         self.value_refs: Mapping[str, frozenset[Any]] = value_refs or {}
         self._dwell_state: dict[str, _DwellState] = {}
+        # Stage 3-D B2: custom_fn 异常隔离审计 (§5.4).
+        # eval_failure_counts: per-rule_id 计数, Phase 9 metric 来源.
+        # _failures_this_tick: 当 tick 自产的 RULE_EVAL_FAILED 列表;
+        # evaluate() 末尾 extend 到返回 verdicts 里, 下一 tick 起始清空.
+        self.eval_failure_counts: dict[str, int] = {}
+        self._failures_this_tick: list[Verdict] = []
 
     def evaluate(self) -> list[Verdict]:
-        """评估当前 latest facts, 返回触发的 Verdict 列表."""
+        """评估当前 latest facts, 返回触发的 Verdict 列表 (含 RULE_EVAL_FAILED 自产)."""
         frame = self.aggregator.latest_facts()
         if frame is None:
             return []
+
+        # Stage 3-D B2: 每 tick 起清空自产 failure 队列 (上 tick 已经返出去)
+        self._failures_this_tick = []
 
         facts = frame.facts
         current_phase = self._phase_from(facts)
@@ -70,6 +79,10 @@ class RuleEngine:
                 rule, frame, current_phase, current_phase_source,
                 audit_facts, audit_thresholds,
             ))
+
+        # Stage 3-D B2: custom_fn 异常自产的 RULE_EVAL_FAILED 也透到下游
+        # (走 AlertCoordinator 三闸 + 钉钉 / SSE / alerts.jsonl 同流程).
+        verdicts.extend(self._failures_this_tick)
         return verdicts
 
     # ──────────────────────────────────────────────────────────────
@@ -148,8 +161,15 @@ class RuleEngine:
         )
         try:
             result = fn(ctx)
-        except Exception:
-            # 设计 §5.4: custom_fn 抛异常 → 视未触发 + Phase 9 metric/告警
+        except Exception as e:
+            # 设计 §5.4: custom_fn 抛异常 → 视未触发 + 计数 + 自产
+            # RULE_EVAL_FAILED WARN. 其它规则不受影响 (本函数返 False 即可).
+            self.eval_failure_counts[rule.id] = (
+                self.eval_failure_counts.get(rule.id, 0) + 1
+            )
+            self._failures_this_tick.append(
+                self._build_eval_failed_verdict(rule, frame, e)
+            )
             return False, {}, {}
         audit_facts = dict(result.facts_for_audit)
         return result.matched, audit_facts, {}
@@ -191,6 +211,44 @@ class RuleEngine:
             dedup_key=f"{rule.id}#{frame.recv_ts_ms // 1000}",
             cooldown_ms_override=rule.cooldown_ms,
             desc=rule.desc,
+        )
+
+    def _build_eval_failed_verdict(
+        self,
+        rule: Rule,
+        frame: FrozenFacts,
+        exc: Exception,
+    ) -> Verdict:
+        """Stage 3-D B2: custom_fn 异常时自产的 WARN 级 Verdict.
+
+        rule_id 用 'system.rule_eval_failed' 区分本系统产物 vs 业务规则
+        (方便 alerts.jsonl 检索 + 钉钉 routing 分流). dedup_key 含失败的
+        rule.id, 让同一 rule 的反复失败被 AlertCoordinator dedup gate 合并.
+        """
+        return Verdict(
+            rule_id="system.rule_eval_failed",
+            level=Severity.WARN,
+            code="RULE_EVAL_FAILED",
+            phase_when_fired=self._phase_from(frame.facts) or Phase.OFFLINE,
+            phase_source_when_fired=(
+                self._phase_source_from(frame.facts) or PhaseSource.FALLBACK_IDLE
+            ),
+            facts={
+                "failed_rule_id": rule.id,
+                "failed_custom_fn": rule.custom_fn.value if rule.custom_fn else None,
+                "exception_type": type(exc).__name__,
+                "exception_message": str(exc)[:200],
+            },
+            thresholds={},
+            suggested_action="investigate",
+            context={
+                "dock_sn": frame.facts.get("dock_sn"),
+                "drone_sn": frame.facts.get("drone_sn"),
+            },
+            ts_ms=frame.recv_ts_ms,
+            dedup_key=f"system.rule_eval_failed#{rule.id}#{frame.recv_ts_ms // 1000}",
+            cooldown_ms_override=None,
+            desc=f"规则评估失败 (custom_fn 异常隔离): {rule.id}",
         )
 
 
