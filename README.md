@@ -21,7 +21,8 @@ DJI 大疆机场 3 飞行安全评估与告警系统。
 
 - [x] **Stage 1 — 实时告警最小闭环** ✅（2026-06-10 真实环境验证）：订真 broker / sim broker → 阶段机识别 → 规则触发 → 钉钉收到 `[BLOCK]/[RETURN]` 卡片 → `alerts.jsonl` 落 DISPATCHED；含 `run.sh` 后台运维 + SIGTERM graceful + sim 联调 + 真 broker 切换。涵盖 24 个 commit `a2678cc → fc1c638`。
 - [x] **Stage 2 — 运维控制台** ✅（2026-06-10 真实环境验证）：FastAPI + Panel SSE + ADMIN_TOKEN 鉴权；`/healthz` `/readyz` `/events`（SSE 推 alert + phase_transition）`/admin/mute/{dock_sn}` `/admin/global_mute` `/admin/mutes` `/admin/reload-rules`；`./run.sh admin <subcmd>` 一行 curl 包装。涉及 §7.2 + §8 + §9.3 + §10.1 + §10.5。
-- [ ] Stage 3+ — 后续候选池：B 多机场 / C 告警精度 / D 工程化验收 / E 离线复盘骨架 / F-H 三个离线分析器。详见设计文档 §11.0.3。
+- [x] **Stage 3-D — 工程化验收 + CI 强制门** ✅（2026-06-12 GitHub Actions 首跑通过）：5 commit (`14c3cc8 33b3d6a 9fba652 c8bed70 e6a99f0`)。涵盖：(1) `tests/ci/test_static_checks.py` 静态门（禁 publish / 禁原始 envelope 落盘 / `custom_fn` 白名单 + 禁 dotted-eval）(2) `custom_fn` 异常隔离 + 自产 `RULE_EVAL_FAILED` WARN (3) `tests/replay/` baseline 回归（首份 `8UUXN7N00A0GAA_20260605-165145.json` 2739 envelopes / 14 transitions / 4660 verdicts / 24 DISPATCHED）+ `scripts/regen_replay_baseline.py` (4) `.github/workflows/ci.yml` 跑 ruff + 257 测 (5) `PULL_REQUEST_TEMPLATE.md` 强制 "变化原因 + 是否 regen baseline"。涉及 §12.4 全部 + §5.4。
+- [ ] Stage 3+ 余下候选池：B 多机场 / C 告警精度 / E 离线复盘骨架 / F-H 三个离线分析器。详见设计文档 §11.0.3。
 
 ## M1 快速启动（sim 联调，30 秒跑通）
 
