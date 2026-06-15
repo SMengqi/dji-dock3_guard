@@ -5,6 +5,6 @@
 """
 
 from dock_guard.analytics.collector import collect
-from dock_guard.analytics.models import FlightMetrics, FlightReport, SCHEMA_VERSION
+from dock_guard.analytics.models import SCHEMA_VERSION, FlightMetrics, FlightReport
 
-__all__ = ["FlightMetrics", "FlightReport", "SCHEMA_VERSION", "collect"]
+__all__ = ["SCHEMA_VERSION", "FlightMetrics", "FlightReport", "collect"]

@@ -13,7 +13,7 @@ import textwrap
 import pytest
 
 from dock_guard.analytics import collect
-from dock_guard.analytics.models import FlightMetrics, FlightReport, SCHEMA_VERSION
+from dock_guard.analytics.models import SCHEMA_VERSION, FlightReport
 
 
 def _seed_config(tmp_path: pathlib.Path) -> pathlib.Path:

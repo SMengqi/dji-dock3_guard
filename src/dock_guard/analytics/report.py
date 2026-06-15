@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from dock_guard.analytics.models import FlightReport
 
@@ -217,4 +217,4 @@ def _format_duration(ms: int) -> str:
 
 
 def _format_utc(ts_ms: int) -> str:
-    return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.fromtimestamp(ts_ms / 1000, tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
