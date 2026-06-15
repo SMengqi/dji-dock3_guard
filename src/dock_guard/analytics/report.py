@@ -37,6 +37,8 @@ def render_markdown(rep: FlightReport) -> str:
     parts.append("")
     parts.extend(_render_metrics(rep))
     parts.append("")
+    parts.extend(_render_battery_chart(rep))
+    parts.append("")
     parts.extend(_render_phase_timeline(rep))
     parts.append("")
     parts.extend(_render_alerts_timeline(rep))
@@ -118,6 +120,33 @@ def _render_metrics(rep: FlightReport) -> list[str]:
     lines.append(f"- **最长 OFFLINE 持续:** {m.longest_offline_ms / 1000:.1f} 秒")
     lines.append(f"- **飞行总时长(不含 OFFLINE/IDLE):** "
                  f"{_format_duration(m.flight_duration_ms)}({m.flight_duration_ms / 1000:.0f}s)")
+    return lines
+
+
+def _render_battery_chart(rep: FlightReport) -> list[str]:
+    """Stage 5-F: 单架次 ASCII 电池曲线 (60 col 宽; 每行一个采样点)."""
+    samples = rep.battery_samples
+    if not samples:
+        return ["## 电池曲线", "", "(无电池数据)"]
+
+    lines = ["## 电池曲线", "", "```"]
+    width = 60
+    duration_min = max(1, (samples[-1].rel_ms - samples[0].rel_ms) // 60_000 + 1)
+    step = max(1, len(samples) // duration_min) if duration_min > 0 else 1
+    for s in samples[::step]:
+        rel_min = s.rel_ms // 60_000
+        pos = int(s.percent / 100 * (width - 1))
+        row = ["░"] * width
+        for i in range(max(0, pos - 2), min(width, pos + 2)):
+            row[i] = "█"
+        lines.append(f"  {s.percent:3d}% {''.join(row)}  +{rel_min}m")
+    lines.append("```")
+    lines.append("")
+    if len(samples) >= 2:
+        dp = samples[0].percent - samples[-1].percent
+        dm = (samples[-1].rel_ms - samples[0].rel_ms) / 60_000
+        if dm > 0:
+            lines.append(f"平均耗电速率: {dp / dm:.1f} %/分钟")
     return lines
 
 
