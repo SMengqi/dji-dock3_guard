@@ -23,7 +23,8 @@ DJI 大疆机场 3 飞行安全评估与告警系统。
 - [x] **Stage 2 — 运维控制台** ✅（2026-06-10 真实环境验证）：FastAPI + Panel SSE + ADMIN_TOKEN 鉴权；`/healthz` `/readyz` `/events`（SSE 推 alert + phase_transition）`/admin/mute/{dock_sn}` `/admin/global_mute` `/admin/mutes` `/admin/reload-rules`；`./run.sh admin <subcmd>` 一行 curl 包装。涉及 §7.2 + §8 + §9.3 + §10.1 + §10.5。
 - [x] **Stage 3-D — 工程化验收 + CI 强制门** ✅（2026-06-12 GitHub Actions 首跑通过）：5 commit (`14c3cc8 33b3d6a 9fba652 c8bed70 e6a99f0`)。涵盖：(1) `tests/ci/test_static_checks.py` 静态门（禁 publish / 禁原始 envelope 落盘 / `custom_fn` 白名单 + 禁 dotted-eval）(2) `custom_fn` 异常隔离 + 自产 `RULE_EVAL_FAILED` WARN (3) `tests/replay/` baseline 回归（首份 `8UUXN7N00A0GAA_20260605-165145.json` 2739 envelopes / 14 transitions / 4660 verdicts / 24 DISPATCHED）+ `scripts/regen_replay_baseline.py` (4) `.github/workflows/ci.yml` 跑 ruff + 257 测 (5) `PULL_REQUEST_TEMPLATE.md` 强制 "变化原因 + 是否 regen baseline"。涉及 §12.4 全部 + §5.4。
 - [x] **Stage 4-E — 离线复盘骨架** ✅（2026-06-14 真实环境验证）：4 commit (`51beec7 83fed75 f096faf` + T5 docs)。`python -m dock_guard.analytics <dir>` 一行从 sim 录制出 markdown + json 报告，批量自动汇总 `index.md`。涵盖：(1) `analytics/{models,collector,report,__main__}.py` 子包；FlightReport schema v2 + 5 个指标（阵风峰值/最低电量/最长 OFFLINE/飞行时长/告警统计）(2) CLI 自动 single/batch 识别 + `--out`/`--force`/`--quiet`/`--config-dir` (3) ASCII Gantt 60 列封顶 + 中文译名跟 dingtalk 同口径 (4) `tests/replay/_helpers.py` 改成 collector 薄壳 (D15)；baseline v1 测试零回归 (5) 28 测（10 collector + 8 report + 8 CLI + 3 e2e 含 PREFLIGHT_DOCK_TILT / INFLIGHT_BATTERY_LOW 真录制断言）。涉及设计 §13.1–§13.3 + §13.8。
-- [ ] Stage 3+ 余下候选池：B 多机场 / C 告警精度 / F-H 三个离线分析器。详见设计文档 §11.0.3。
+- [x] **Stage 5-F — 电池基线分析器** ✅（2026-06-15 真实环境验证）：8 commit。`python -m dock_guard.analytics.analyzers.battery <父目录>` 跑跨架次电池统计 → `battery_reference.yaml` + 跨架次 markdown 报告；单架次报告加 ASCII 电池曲线段。涵盖：(1) FlightReport schema v2→v3 加 `battery_samples` 时序 (10s 采样) (2) `battery_buckets` 分桶 (3 wind × 2 height × 3 SOC = 18 桶) + 速率差分 + 30s 滑窗 (3) `battery_fit` OLS R² + p50/p95/p99 (numpy) (4) `battery_anomaly` p95/p99 异常检测 (red ≥ 3 → 架次异常) (5) `battery_report` yaml writer + 跨架次 markdown (6) `battery.py` 编排 + CLI (设计 §6 schema, 给未来 C 候选 `custom_fn` 用) (7) numpy 依赖。涉及设计 §13.4 + §11.0.4 F 候选。
+- [ ] Stage 5+ 余下候选池：B 多机场 / C 告警精度 / G RTH 时间 / H 链路抖动。详见设计文档 §11.0.4。
 
 ## M1 快速启动（sim 联调，30 秒跑通）
 
@@ -88,6 +89,23 @@ docker compose up -d dock_guard
 ```
 
 更多脚本选项：`./install.sh --help` / `./run.sh help`；配置详见设计文档 §15「配置文件总览」。
+
+## 电池基线分析（Stage 5-F）
+
+跑跨架次电池统计出 `battery_reference.yaml` + 跨架次报告：
+
+```bash
+# 父目录跑分析 (要求子目录都已跑过 Stage 4-E 出 v3 report.json)
+./run.sh battery-analyzer ../sim_dji_cloud_service/sim_dji_cloud/recordings/
+
+# 指定输出目录
+./run.sh battery-analyzer recordings/ --out /tmp/battery/
+
+# 调小最小样本数 (默认 30; 小样本场景调低)
+./run.sh battery-analyzer recordings/ --min-samples 10
+```
+
+输出: `<父目录>/battery_analysis/{battery_reference.yaml, report.md}`. yaml 不会自动 cp 到 `config/`，用户手动决定何时启用 (C 候选实装后).
 
 ## 离线复盘（Stage 4-E）
 

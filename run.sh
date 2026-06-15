@@ -16,6 +16,13 @@
 #                        额外参数透传给 python -m dock_guard.analytics:
 #                          --out <dir>   --force   --quiet   --config-dir <dir>
 #
+# 电池基线分析 (Stage 5-F, 前台跑, 不 nohup):
+#   battery-analyzer [父目录] [...]
+#                        跨架次电池统计 -> battery_reference.yaml + report.md
+#                        要求子目录已跑过 Stage 4-E (出 v3 report.json)
+#                        默认目录见脚本顶部 DEFAULT_BATTERY_DIR
+#                        额外参数: --out <dir>  --min-samples N  --quiet
+#
 # 管理:
 #   status               查看各模式运行状态
 #   stop <模式>          优雅停止某模式 (SIGTERM -> graceful close, 30s 内未退则 SIGKILL)
@@ -50,6 +57,9 @@ DEFAULT_REPLAY_SPEED="0"
 
 # Stage 4-E 离线分析默认录制目录 (传父目录 = 批量; 传单录制 = 单份)
 DEFAULT_ANALYTICS_DIR="../sim_dji_cloud_service/sim_dji_cloud/recordings"
+
+# Stage 5-F 电池分析默认父目录 (要求子目录都已 Stage 4-E 出 v3 report.json)
+DEFAULT_BATTERY_DIR="../sim_dji_cloud_service/sim_dji_cloud/recordings"
 
 # python -m dock_guard 的额外参数 (config-dir / data-dir 一般走自动检测, 不必填)
 EXTRA_ARGS=""
@@ -138,7 +148,7 @@ status() {
 }
 
 usage() {
-  sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'
   cat <<'EOF'
 
 admin 子命令 (Stage 2 控制面, 走 .env 的 ADMIN_TOKEN):
@@ -273,6 +283,19 @@ case "$mode" in
     fi
     # 透传剩余参数 (--out / --force / --quiet 等)
     exec python -m dock_guard.analytics "$dir" "$@"
+    ;;
+  battery-analyzer)
+    # Stage 5-F 电池基线分析: 父目录 v3 report.json -> battery_reference.yaml + report.md.
+    # 前台跑, 不 nohup; 100 架次几十秒.
+    dir="${1:-$DEFAULT_BATTERY_DIR}"
+    shift || true
+    if [ ! -d "$dir" ]; then
+      echo "[run] battery-analyzer 目录不存在: $dir" >&2
+      echo "       提示: 改脚本顶部 DEFAULT_BATTERY_DIR 或 ./run.sh battery-analyzer <目录>" >&2
+      exit 2
+    fi
+    # 透传剩余参数 (--out / --min-samples / --quiet 等)
+    exec python -m dock_guard.analytics.analyzers.battery "$dir" "$@"
     ;;
   status)
     status
