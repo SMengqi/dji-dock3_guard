@@ -17,6 +17,7 @@ from typing import Any
 from dock_guard.aggregator import DockAggregator
 from dock_guard.analytics.models import (
     SCHEMA_VERSION,
+    BatterySample,
     FlightMetrics,
     FlightReport,
 )
@@ -24,6 +25,8 @@ from dock_guard.config import load_app_config
 from dock_guard.coordinator import AlertCoordinator, NullAlertSink
 from dock_guard.ingest import ReplaySource
 from dock_guard.rules import RuleEngine
+
+SAMPLE_INTERVAL_MS = 10_000   # Stage 5-F: 每 10s 采一次 battery_samples
 
 
 def collect(
@@ -72,6 +75,10 @@ async def _collect_async(
     last_ts: int | None = None
     total = 0
 
+    # Stage 5-F: 10s 间隔的 battery_samples 时序
+    battery_samples: list[BatterySample] = []
+    next_sample_rel_ms = 0
+
     async for env in src:
         total += 1
         envelope_counts[env.topic_key.value] += 1
@@ -92,6 +99,19 @@ async def _collect_async(
             if isinstance(batt, int) and 0 <= batt <= 100:
                 if min_batt is None or batt < min_batt:
                     min_batt, min_batt_at = batt, env.recv_ts_ms
+            # Stage 5-F: 每 10s 采样 battery_samples (要 battery + height + wind 全就绪)
+            if first_ts is not None:
+                rel_ms = env.recv_ts_ms - first_ts
+                if rel_ms >= next_sample_rel_ms:
+                    height = frame.facts.get("height")
+                    if (isinstance(batt, int) and 0 <= batt <= 100
+                            and isinstance(height, (int, float))
+                            and isinstance(wind, (int, float))):
+                        battery_samples.append(BatterySample(
+                            rel_ms=rel_ms, percent=batt,
+                            height_m=float(height), wind_ms=float(wind),
+                        ))
+                        next_sample_rel_ms += SAMPLE_INTERVAL_MS
 
         for tr in agg.drain_phase_transitions():
             phase_transitions.append({
@@ -174,6 +194,7 @@ async def _collect_async(
         verdicts=verdicts,
         alert_decisions=alert_decisions,
         metrics=metrics,
+        battery_samples=battery_samples,
     )
 
 

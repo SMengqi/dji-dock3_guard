@@ -66,6 +66,7 @@ def _make_report(**overrides) -> FlightReport:
              "level": "BLOCK", "decision": "DISPATCHED", "gates": {"mute": "pass"}},
         ],
         metrics=metrics,
+        battery_samples=[],
     )
     base.update(overrides)
     return FlightReport(**base)
