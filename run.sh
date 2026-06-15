@@ -10,6 +10,12 @@
 #   replay [目录] [倍速] REPLAY 模式: 读 recordings/<sn>_<ts>/ 离线回放
 #                        默认目录见脚本顶部 DEFAULT_REPLAY_DIR, 默认倍速 0 (尽快)
 #
+# 离线复盘 (Stage 4-E, 前台跑, 不 nohup):
+#   analytics [目录] [...] 录制目录 -> markdown + json 报告 (父目录则批量 + index.md)
+#                        默认目录见脚本顶部 DEFAULT_ANALYTICS_DIR
+#                        额外参数透传给 python -m dock_guard.analytics:
+#                          --out <dir>   --force   --quiet   --config-dir <dir>
+#
 # 管理:
 #   status               查看各模式运行状态
 #   stop <模式>          优雅停止某模式 (SIGTERM -> graceful close, 30s 内未退则 SIGKILL)
@@ -19,6 +25,9 @@
 # 例:
 #   ./run.sh replay                                                    # 用脚本顶部默认目录 + 倍速 0
 #   ./run.sh replay ../sim_dji_cloud/recordings/8UU.../  1.0           # 临时指定目录 + 原速
+#   ./run.sh analytics                                                 # 默认目录, 批量出报告 + index.md
+#   ./run.sh analytics ../sim_dji_cloud/recordings/8UU.../             # 单架次报告
+#   ./run.sh analytics recordings/ --out /tmp/reports/ --force         # 输出到独立目录 + 强重跑
 #   ./run.sh live                                                      # 启动实时
 #   ./run.sh status                                                    # 看哪些在跑
 #   ./run.sh logs live                                                 # 跟踪 live 日志
@@ -38,6 +47,9 @@ DEFAULT_REPLAY_DIR="../sim_dji_cloud_service/sim_dji_cloud/recordings/8UUXN7N00A
 
 # REPLAY 默认倍速: 0=尽可能快 (常用于 CI / 冒烟), 1.0=原速 (用于真实时序排查)
 DEFAULT_REPLAY_SPEED="0"
+
+# Stage 4-E 离线分析默认录制目录 (传父目录 = 批量; 传单录制 = 单份)
+DEFAULT_ANALYTICS_DIR="../sim_dji_cloud_service/sim_dji_cloud/recordings"
 
 # python -m dock_guard 的额外参数 (config-dir / data-dir 一般走自动检测, 不必填)
 EXTRA_ARGS=""
@@ -126,7 +138,7 @@ status() {
 }
 
 usage() {
-  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'
   cat <<'EOF'
 
 admin 子命令 (Stage 2 控制面, 走 .env 的 ADMIN_TOKEN):
@@ -248,6 +260,19 @@ case "$mode" in
     fi
     # shellcheck disable=SC2086
     launch replay python -m dock_guard --replay "$dir" --replay-speed "$speed" $EXTRA_ARGS
+    ;;
+  analytics)
+    # Stage 4-E 离线复盘: 录制目录 -> markdown + json 报告 (+ 批量 index.md).
+    # 前台跑, 不 nohup; 单架次几秒, 批量 N 份按 N×几秒计.
+    dir="${1:-$DEFAULT_ANALYTICS_DIR}"
+    shift || true
+    if [ ! -d "$dir" ]; then
+      echo "[run] analytics 目录不存在: $dir" >&2
+      echo "       提示: 改脚本顶部 DEFAULT_ANALYTICS_DIR 或 ./run.sh analytics <目录>" >&2
+      exit 2
+    fi
+    # 透传剩余参数 (--out / --force / --quiet 等)
+    exec python -m dock_guard.analytics "$dir" "$@"
     ;;
   status)
     status
