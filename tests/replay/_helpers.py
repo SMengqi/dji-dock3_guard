@@ -21,6 +21,16 @@ from dock_guard.analytics.collector import collect
 
 SCHEMA_VERSION = 1
 
+# baseline 测试用占位 env (跟 stage_config_dir 写出的 ${VAR} 占位符匹配).
+# baseline 测试不依赖 .env / os.environ, 显式传 env= 隔离生产配置.
+_FAKE_ENV = {
+    "MQTT_BROKER_URL": "tcp://baseline-test:1883",
+    "MQTT_USERNAME": "x",
+    "MQTT_PASSWORD": "x",
+    "MQTT_DOCK_SN": "8UUXN7N00A0GAA",
+    "ADMIN_TOKEN": "baseline-test-token",
+}
+
 
 def stage_config_dir(dst: pathlib.Path, repo_config_dir: pathlib.Path) -> None:
     """合成最小 runtime.yaml + 复用仓库 mode_code_map/alert_levels/enums/rules.
@@ -49,7 +59,7 @@ def run_replay_collect(
     config_dir: pathlib.Path,
 ) -> dict[str, Any]:
     """跑 collector 后裁掉 metrics, 返 baseline schema v1 字段集合."""
-    d = collect(recording_dir, config_dir).to_dict()
+    d = collect(recording_dir, config_dir, env=_FAKE_ENV).to_dict()
     return {
         "schema_version": SCHEMA_VERSION,
         "recording": d["recording"],

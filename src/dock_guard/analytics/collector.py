@@ -8,8 +8,10 @@ peak_wind_gust_30s / min_battery 并算 phase 间隔.
 from __future__ import annotations
 
 import asyncio
+import os
 import pathlib
 from collections import Counter
+from collections.abc import Mapping
 from typing import Any
 
 from dock_guard.aggregator import DockAggregator
@@ -23,24 +25,32 @@ from dock_guard.coordinator import AlertCoordinator, NullAlertSink
 from dock_guard.ingest import ReplaySource
 from dock_guard.rules import RuleEngine
 
-# 占位 env: replay 不连 broker; dock_sn 由 manifest 给, 跟 env 无关
-_FAKE_ENV = {
-    "MQTT_BROKER_URL": "tcp://analytics-stub:1883",
-    "MQTT_USERNAME": "x",
-    "MQTT_PASSWORD": "x",
-    "MQTT_DOCK_SN": "ANALYTICS_STUB",
-    "ADMIN_TOKEN": "analytics-stub-token",
-}
 
+def collect(
+    recording_dir: pathlib.Path,
+    config_dir: pathlib.Path,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> FlightReport:
+    """跑离线分析流水线 -> FlightReport.
 
-def collect(recording_dir: pathlib.Path, config_dir: pathlib.Path) -> FlightReport:
-    return asyncio.run(_collect_async(recording_dir, config_dir))
+    env 用于展开 yaml 配置里的 ${VAR} 占位符 (跟 load_app_config 同口径).
+    不传 (None) -> 默认用 os.environ; 生产 CLI 通过 __main__.load_dotenv()
+    把 .env 注入 os.environ, 这样 dingtalk_robots.yaml 的 ${DINGTALK_*} 等
+    占位符能正确展开 (即便离线分析不发钉钉, load_app_config 仍要展开 yaml).
+    显式传入 (例: tests/replay/_helpers.py 的 _FAKE_ENV) 时用传入值,
+    跟生产 env 隔离.
+    """
+    return asyncio.run(_collect_async(recording_dir, config_dir, env))
 
 
 async def _collect_async(
-    recording_dir: pathlib.Path, config_dir: pathlib.Path
+    recording_dir: pathlib.Path,
+    config_dir: pathlib.Path,
+    env: Mapping[str, str] | None,
 ) -> FlightReport:
-    cfg = load_app_config(config_dir, env=_FAKE_ENV)
+    effective_env = env if env is not None else dict(os.environ)
+    cfg = load_app_config(config_dir, env=effective_env)
     src = ReplaySource(recording_dir, speed=0)
 
     agg = DockAggregator(src.dock_sn, cfg)

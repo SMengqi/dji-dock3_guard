@@ -56,6 +56,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    # 沿用 src/dock_guard/__main__.py 同口径: .env -> os.environ -> load_app_config.
+    # 在 parse_args 之后 (--help 已提前退出), config 加载之前.
+    # override=False -> 已存在的 shell env 优先, 不被 .env 覆盖.
+    from dotenv import load_dotenv
+    load_dotenv(override=False)
+
     path = args.path.resolve()
     if not path.exists():
         print(f"路径不存在: {path}", file=sys.stderr)
