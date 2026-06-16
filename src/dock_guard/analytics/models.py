@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 # v1 = Stage 3-D B3 baseline schema (无 metrics)
@@ -35,6 +35,9 @@ class FlightMetrics:
     total_dispatched: int
     total_suppressed: int
     verdicts_by_code: dict[str, int]
+    # 风向计数 (key='1'..'8' 对应 N/NE/E/SE/S/SW/W/NW; value=秒数)
+    # 纯添加字段, schema_version 保持 3 (向前兼容).
+    wind_direction_seconds: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

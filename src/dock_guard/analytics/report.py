@@ -39,6 +39,8 @@ def render_markdown(rep: FlightReport) -> str:
     parts.append("")
     parts.extend(_render_battery_chart(rep))
     parts.append("")
+    parts.extend(_render_wind_direction(rep))
+    parts.append("")
     parts.extend(_render_phase_timeline(rep))
     parts.append("")
     parts.extend(_render_alerts_timeline(rep))
@@ -147,6 +149,43 @@ def _render_battery_chart(rep: FlightReport) -> list[str]:
         dm = (samples[-1].rel_ms - samples[0].rel_ms) / 60_000
         if dm > 0:
             lines.append(f"平均耗电速率: {dp / dm:.1f} %/分钟")
+    return lines
+
+
+# wind_direction enum_int -> (英文缩写, 中文名)
+_WIND_DIR_LABELS = [
+    ("1", "N",  "正北"),
+    ("2", "NE", "东北"),
+    ("3", "E",  "东"),
+    ("4", "SE", "东南"),
+    ("5", "S",  "南"),
+    ("6", "SW", "西南"),
+    ("7", "W",  "西"),
+    ("8", "NW", "西北"),
+]
+
+
+def _render_wind_direction(rep: FlightReport) -> list[str]:
+    """风向分布直方图 (8 个方向, 按飞行秒数 + 百分比)."""
+    wd = rep.metrics.wind_direction_seconds
+    if not wd:
+        return ["## 风向分布", "", "(无风向数据)"]
+
+    total = sum(wd.values()) or 1
+    bar_width = 26   # ASCII 条最大宽度
+    lines = ["## 风向分布", "", "```"]
+    dominant_key, dominant_sec = max(wd.items(), key=lambda kv: kv[1])
+    for key, en, cn in _WIND_DIR_LABELS:
+        sec = wd.get(key, 0)
+        pct = 100 * sec / total
+        filled = int(pct / 100 * bar_width)
+        bar = "█" * filled + "░" * (bar_width - filled)
+        marker = "  <- 主导" if key == dominant_key and sec > 0 else ""
+        lines.append(f"  {cn:<3}  {en:<2}  {bar}  {pct:5.1f}% ({sec} 秒){marker}")
+    lines.append("```")
+    lines.append("")
+    dominant_cn = next(cn for k, en, cn in _WIND_DIR_LABELS if k == dominant_key)
+    lines.append(f"主导风向: {dominant_cn} ({dominant_sec} 秒)")
     return lines
 
 

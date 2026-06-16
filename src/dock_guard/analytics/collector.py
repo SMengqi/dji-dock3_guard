@@ -78,6 +78,8 @@ async def _collect_async(
     # Stage 5-F: 10s 间隔的 battery_samples 时序
     battery_samples: list[BatterySample] = []
     next_sample_rel_ms = 0
+    # 风向计数 (10s 一格 -> 秒数 = count * 10)
+    wind_direction_counts: dict[str, int] = {}
 
     async for env in src:
         total += 1
@@ -111,6 +113,13 @@ async def _collect_async(
                             rel_ms=rel_ms, percent=batt,
                             height_m=float(height), wind_ms=float(wind),
                         ))
+                        # 顺手采 wind_direction (10s 一格)
+                        wd = frame.facts.get("wind_direction")
+                        if isinstance(wd, int) and 1 <= wd <= 8:
+                            key = str(wd)
+                            wind_direction_counts[key] = (
+                                wind_direction_counts.get(key, 0) + 1
+                            )
                         next_sample_rel_ms += SAMPLE_INTERVAL_MS
 
         for tr in agg.drain_phase_transitions():
@@ -178,6 +187,10 @@ async def _collect_async(
         total_dispatched=decisions.get("DISPATCHED", 0),
         total_suppressed=decisions.get("SUPPRESSED", 0),
         verdicts_by_code=dict(codes),
+        wind_direction_seconds={
+            k: v * (SAMPLE_INTERVAL_MS // 1000)
+            for k, v in wind_direction_counts.items()
+        },
     )
 
     return FlightReport(
