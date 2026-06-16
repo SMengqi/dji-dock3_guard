@@ -164,7 +164,7 @@ def _aggregate_per_minute(
 
 def _mermaid_line(
     title: str, x_labels: list, y_label: str,
-    values: list[float], y_max: float,
+    values: list[float], y_max: float, *, y_min: float = 0,
 ) -> list[str]:
     """mermaid xychart-beta line 折线图块."""
     x_str = "[" + ", ".join(str(x) for x in x_labels) + "]"
@@ -174,26 +174,8 @@ def _mermaid_line(
         "xychart-beta",
         f'    title "{title}"',
         f"    x-axis {x_str}",
-        f'    y-axis "{y_label}" 0 --> {y_max:.0f}',
+        f'    y-axis "{y_label}" {y_min:.0f} --> {y_max:.0f}',
         f"    line {v_str}",
-        "```",
-    ]
-
-
-def _mermaid_bar(
-    title: str, x_labels: list[str], y_label: str, counts: list[int],
-) -> list[str]:
-    """mermaid xychart-beta bar 柱状图块."""
-    x_str = "[" + ", ".join(x_labels) + "]"
-    c_str = "[" + ", ".join(str(c) for c in counts) + "]"
-    y_max = max(counts) if counts else 1
-    return [
-        "```mermaid",
-        "xychart-beta",
-        f'    title "{title}"',
-        f"    x-axis {x_str}",
-        f'    y-axis "{y_label}" 0 --> {y_max}',
-        f"    bar {c_str}",
         "```",
     ]
 
@@ -342,24 +324,35 @@ def _render_wind_speed_chart(rep: FlightReport) -> list[str]:
 
 
 def _render_wind_direction(rep: FlightReport) -> list[str]:
-    """风向时序: mermaid bar (分布直方图) + ASCII 时序折线 + 主导摘要."""
+    """风向时序: mermaid line 时序图 (Y=方向 1-8, X=分钟) + ASCII 时序 + 主导."""
     valid = [s for s in rep.battery_samples if s.wind_direction is not None]
     if not valid:
         return ["## 风向时序", "", "(无风向数据)"]
 
     from collections import Counter
-    counts = Counter(s.wind_direction for s in valid)
-    # 8 方向计数 (key 1..8)
-    bar_counts = [counts.get(i, 0) for i in range(1, 9)]
-    x_labels = [en for _, en, _ in _WIND_DIR_LABELS]
+
+    # 每分钟取众数 (mode) 作为代表方向 - 均值无意义 (N=1 与 NW=8 罗盘上其实相邻)
+    duration_min = max(1, (valid[-1].rel_ms - valid[0].rel_ms) // 60_000 + 1)
+    by_min: dict[int, list[int]] = {}
+    for s in valid:
+        m = s.rel_ms // 60_000
+        by_min.setdefault(m, []).append(s.wind_direction)
+    minute_values: list[float] = []
+    last = valid[0].wind_direction
+    for m in range(duration_min):
+        if m in by_min:
+            mode, _ = Counter(by_min[m]).most_common(1)[0]
+            last = mode
+        minute_values.append(float(last))
 
     lines = ["## 风向时序", ""]
-    # Mermaid bar (分布)
-    lines.extend(_mermaid_bar(
-        title="风向分布 (按 10s 采样计数)",
-        x_labels=x_labels,
-        y_label="采样数",
-        counts=bar_counts,
+    # Mermaid line 时序图 (Y=enum 1-8, X=分钟)
+    lines.extend(_mermaid_line(
+        title="风向时序 (1=N 2=NE 3=E 4=SE 5=S 6=SW 7=W 8=NW)",
+        x_labels=list(range(duration_min)),
+        y_label="方向",
+        values=minute_values,
+        y_max=8, y_min=1,
     ))
     lines.append("")
     # ASCII 时序 (终端)
@@ -376,6 +369,7 @@ def _render_wind_direction(rep: FlightReport) -> list[str]:
     lines.append("")
 
     # 主导
+    counts = Counter(s.wind_direction for s in valid)
     dominant_key, dominant_count = counts.most_common(1)[0]
     cn = next(cn for k, _, cn in _WIND_DIR_LABELS if int(k) == dominant_key)
     pct = 100 * dominant_count / sum(counts.values())
