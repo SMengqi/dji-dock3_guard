@@ -42,7 +42,8 @@ class TestBatteryChart:
         assert "## 电池曲线" in md
         assert "无电池数据" in md or "无数据" in md
 
-    def test_samples_render_ascii(self) -> None:
+    def test_samples_render_dual_charts(self) -> None:
+        """双版本: mermaid (GitHub/VSCode 渲染) + ASCII (终端 cat)."""
         samples = [
             BatterySample(rel_ms=0,       percent=100, height_m=10, wind_ms=2),
             BatterySample(rel_ms=60_000,  percent=85,  height_m=20, wind_ms=3),
@@ -50,12 +51,16 @@ class TestBatteryChart:
         ]
         md = render_markdown(_make_report(samples))
         assert "## 电池曲线" in md
+        # Mermaid 块
+        assert "```mermaid" in md
+        assert "xychart-beta" in md
+        assert "line " in md   # mermaid line directive
+        # ASCII 块
         assert "█" in md
-        # 折线图 Y 轴含 100% 和 0% 两个端点
+        assert "终端文本图" in md
+        # Y 轴端点
         assert "100%" in md
         assert "0%" in md
-        # X 轴 5 分钟 -> "5m"
-        assert "5m" in md or "5min" in md
 
     def test_summary_avg_rate(self) -> None:
         """100% -> 40% in 5min => 12 %/min."""

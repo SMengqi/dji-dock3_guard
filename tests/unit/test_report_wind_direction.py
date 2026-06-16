@@ -53,8 +53,8 @@ class TestWindDirectionChart:
         assert "## 风向时序" in md
         assert "无风向数据" in md or "无数据" in md
 
-    def test_renders_line_chart_with_direction_labels(self) -> None:
-        """折线图: Y 轴是 8 方向缩写, X 轴是时间."""
+    def test_renders_dual_charts(self) -> None:
+        """双版本: mermaid bar (分布) + ASCII 时序."""
         samples = [
             BatterySample(rel_ms=0,       percent=100, height_m=10, wind_ms=2,
                           wind_direction=1),  # N
@@ -69,8 +69,12 @@ class TestWindDirectionChart:
         ]
         md = render_markdown(_make_report(samples))
         assert "## 风向时序" in md
+        # Mermaid bar chart
+        assert "```mermaid" in md
+        assert "xychart-beta" in md
+        assert "bar " in md
+        # ASCII 时序保留
         assert "█" in md
-        # Y 轴 8 个方向缩写
         for en in ("N", "NE", "E", "SE", "S", "SW", "W", "NW"):
             assert en in md
 

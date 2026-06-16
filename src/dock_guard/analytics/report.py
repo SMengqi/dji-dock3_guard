@@ -140,6 +140,64 @@ _WIND_DIR_LABELS = [
 ]
 
 
+def _aggregate_per_minute(
+    samples, *, value_func, duration_min: int,
+) -> list[float]:
+    """聚合 samples 到每分钟一个值 (该分钟内 value 均值).
+
+    无样本的分钟用前一个值填 (折线连续).
+    """
+    buckets: dict[int, list[float]] = {}
+    for s in samples:
+        m = s.rel_ms // 60_000
+        buckets.setdefault(m, []).append(value_func(s))
+    values: list[float] = []
+    for m in range(duration_min):
+        if m in buckets:
+            values.append(sum(buckets[m]) / len(buckets[m]))
+        elif values:
+            values.append(values[-1])
+        else:
+            values.append(0.0)
+    return values
+
+
+def _mermaid_line(
+    title: str, x_labels: list, y_label: str,
+    values: list[float], y_max: float,
+) -> list[str]:
+    """mermaid xychart-beta line 折线图块."""
+    x_str = "[" + ", ".join(str(x) for x in x_labels) + "]"
+    v_str = "[" + ", ".join(f"{v:.1f}" for v in values) + "]"
+    return [
+        "```mermaid",
+        "xychart-beta",
+        f'    title "{title}"',
+        f"    x-axis {x_str}",
+        f'    y-axis "{y_label}" 0 --> {y_max:.0f}',
+        f"    line {v_str}",
+        "```",
+    ]
+
+
+def _mermaid_bar(
+    title: str, x_labels: list[str], y_label: str, counts: list[int],
+) -> list[str]:
+    """mermaid xychart-beta bar 柱状图块."""
+    x_str = "[" + ", ".join(x_labels) + "]"
+    c_str = "[" + ", ".join(str(c) for c in counts) + "]"
+    y_max = max(counts) if counts else 1
+    return [
+        "```mermaid",
+        "xychart-beta",
+        f'    title "{title}"',
+        f"    x-axis {x_str}",
+        f'    y-axis "{y_label}" 0 --> {y_max}',
+        f"    bar {c_str}",
+        "```",
+    ]
+
+
 def _render_line_chart(
     pairs: list[tuple[int, float]],
     *,
@@ -205,20 +263,38 @@ def _render_line_chart(
 
 
 def _render_battery_chart(rep: FlightReport) -> list[str]:
-    """单架次 ASCII 电池折线图 (Y=百分比 0-100, X=时间)."""
+    """电池曲线: mermaid line + ASCII 折线图 + 摘要."""
     samples = rep.battery_samples
     if not samples:
         return ["## 电池曲线", "", "(无电池数据)"]
 
+    duration_min = max(1, (samples[-1].rel_ms - samples[0].rel_ms) // 60_000 + 1)
+    minute_values = _aggregate_per_minute(
+        samples, value_func=lambda s: float(s.percent), duration_min=duration_min,
+    )
+
+    lines = ["## 电池曲线", ""]
+    # Mermaid (GitHub / VSCode 渲染)
+    lines.extend(_mermaid_line(
+        title="电池电量",
+        x_labels=list(range(duration_min)),
+        y_label="电量 (%)",
+        values=minute_values,
+        y_max=100,
+    ))
+    lines.append("")
+    # ASCII (终端 cat)
+    lines.append("终端文本图:")
+    lines.append("")
+    lines.append("```")
     pairs = [(s.rel_ms, float(s.percent)) for s in samples]
-    lines = ["## 电池曲线", "", "```"]
     lines.extend(_render_line_chart(
-        pairs, height=10, width=60,
-        y_min=0, y_max=100,
+        pairs, height=10, width=60, y_min=0, y_max=100,
         y_label_fmt=lambda v: f"{round(v):3d}%",
     ))
     lines.append("```")
     lines.append("")
+
     if len(samples) >= 2:
         dp = samples[0].percent - samples[-1].percent
         dm = (samples[-1].rel_ms - samples[0].rel_ms) / 60_000
@@ -228,22 +304,35 @@ def _render_battery_chart(rep: FlightReport) -> list[str]:
 
 
 def _render_wind_speed_chart(rep: FlightReport) -> list[str]:
-    """单架次 ASCII 风速折线图 (Y=m/s, X=时间)."""
+    """风速曲线: mermaid line + ASCII 折线图 + 摘要."""
     samples = rep.battery_samples
     if not samples:
         return ["## 风速曲线", "", "(无风速数据)"]
 
-    pairs = [(s.rel_ms, s.wind_ms) for s in samples]
+    duration_min = max(1, (samples[-1].rel_ms - samples[0].rel_ms) // 60_000 + 1)
+    minute_values = _aggregate_per_minute(
+        samples, value_func=lambda s: s.wind_ms, duration_min=duration_min,
+    )
     peak = max(s.wind_ms for s in samples)
     avg = sum(s.wind_ms for s in samples) / len(samples)
-    # Y 范围: 0 -> ceil(peak); 最少 5 m/s 给低风场景视觉
     import math
     y_max = max(5.0, math.ceil(peak))
 
-    lines = ["## 风速曲线", "", "```"]
+    lines = ["## 风速曲线", ""]
+    lines.extend(_mermaid_line(
+        title="风速",
+        x_labels=list(range(duration_min)),
+        y_label="m/s",
+        values=minute_values,
+        y_max=y_max,
+    ))
+    lines.append("")
+    lines.append("终端文本图:")
+    lines.append("")
+    lines.append("```")
+    pairs = [(s.rel_ms, s.wind_ms) for s in samples]
     lines.extend(_render_line_chart(
-        pairs, height=8, width=60,
-        y_min=0, y_max=y_max,
+        pairs, height=8, width=60, y_min=0, y_max=y_max,
         y_label_fmt=lambda v: f"{v:4.1f}m/s",
     ))
     lines.append("```")
@@ -253,28 +342,40 @@ def _render_wind_speed_chart(rep: FlightReport) -> list[str]:
 
 
 def _render_wind_direction(rep: FlightReport) -> list[str]:
-    """单架次 ASCII 风向时序折线图 (Y=8 方向, X=时间)."""
-    # 只用有 wind_direction 的 sample
+    """风向时序: mermaid bar (分布直方图) + ASCII 时序折线 + 主导摘要."""
     valid = [s for s in rep.battery_samples if s.wind_direction is not None]
     if not valid:
         return ["## 风向时序", "", "(无风向数据)"]
 
-    pairs = [(s.rel_ms, float(s.wind_direction)) for s in valid]
-    # Y labels top→bottom: 高 enum (NW=8) 在顶, 低 enum (N=1) 在底
-    y_labels = [f"{en:<2}" for _, en, _ in reversed(_WIND_DIR_LABELS)]
+    from collections import Counter
+    counts = Counter(s.wind_direction for s in valid)
+    # 8 方向计数 (key 1..8)
+    bar_counts = [counts.get(i, 0) for i in range(1, 9)]
+    x_labels = [en for _, en, _ in _WIND_DIR_LABELS]
 
-    lines = ["## 风向时序", "", "```"]
+    lines = ["## 风向时序", ""]
+    # Mermaid bar (分布)
+    lines.extend(_mermaid_bar(
+        title="风向分布 (按 10s 采样计数)",
+        x_labels=x_labels,
+        y_label="采样数",
+        counts=bar_counts,
+    ))
+    lines.append("")
+    # ASCII 时序 (终端)
+    lines.append("终端文本图 (时序):")
+    lines.append("")
+    lines.append("```")
+    pairs = [(s.rel_ms, float(s.wind_direction)) for s in valid]
+    y_labels = [f"{en:<2}" for _, en, _ in reversed(_WIND_DIR_LABELS)]
     lines.extend(_render_line_chart(
-        pairs, height=8, width=60,
-        y_min=1, y_max=8,
+        pairs, height=8, width=60, y_min=1, y_max=8,
         y_labels=y_labels,
     ))
     lines.append("```")
     lines.append("")
 
-    # 主导方向
-    from collections import Counter
-    counts = Counter(s.wind_direction for s in valid)
+    # 主导
     dominant_key, dominant_count = counts.most_common(1)[0]
     cn = next(cn for k, _, cn in _WIND_DIR_LABELS if int(k) == dominant_key)
     pct = 100 * dominant_count / sum(counts.values())

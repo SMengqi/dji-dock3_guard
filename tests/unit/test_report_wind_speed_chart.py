@@ -43,7 +43,8 @@ class TestWindSpeedChart:
         assert "## 风速曲线" in md
         assert "无风速数据" in md or "无数据" in md
 
-    def test_renders_line_chart(self) -> None:
+    def test_renders_dual_charts(self) -> None:
+        """双版本: mermaid + ASCII."""
         samples = [
             BatterySample(rel_ms=0,       percent=100, height_m=10, wind_ms=2.0),
             BatterySample(rel_ms=60_000,  percent=85,  height_m=20, wind_ms=4.5),
@@ -53,8 +54,11 @@ class TestWindSpeedChart:
         ]
         md = render_markdown(_make_report(samples))
         assert "## 风速曲线" in md
+        # Mermaid
+        assert "```mermaid" in md
+        assert "xychart-beta" in md
+        # ASCII
         assert "█" in md
-        # m/s 单位标注
         assert "m/s" in md
 
     def test_summary_peak_and_avg(self) -> None:
