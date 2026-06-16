@@ -346,21 +346,24 @@ def _render_wind_direction(rep: FlightReport) -> list[str]:
         minute_values.append(float(last))
 
     lines = ["## 风向时序", ""]
-    # Mermaid line 时序图 (Y=enum 1-8, X=分钟)
+    # Mermaid line 时序图 (Y=原始枚举 1-8, X=分钟; 标题给汉字映射)
     lines.extend(_mermaid_line(
-        title="风向时序 (1=N 2=NE 3=E 4=SE 5=S 6=SW 7=W 8=NW)",
+        title="风向时序 (1=正北 2=东北 3=东 4=东南 5=南 6=西南 7=西 8=西北)",
         x_labels=list(range(duration_min)),
-        y_label="方向",
+        y_label="方向 (枚举)",
         values=minute_values,
         y_max=8, y_min=1,
     ))
     lines.append("")
-    # ASCII 时序 (终端)
+    # ASCII 时序 (终端) - Y 轴用汉字 (单字 CJK 用全角空格 U+3000 补齐 2 字宽)
     lines.append("终端文本图 (时序):")
     lines.append("")
     lines.append("```")
     pairs = [(s.rel_ms, float(s.wind_direction)) for s in valid]
-    y_labels = [f"{en:<2}" for _, en, _ in reversed(_WIND_DIR_LABELS)]
+    y_labels = [
+        cn if len(cn) == 2 else cn + "　"
+        for _, _, cn in reversed(_WIND_DIR_LABELS)
+    ]
     lines.extend(_render_line_chart(
         pairs, height=8, width=60, y_min=1, y_max=8,
         y_labels=y_labels,

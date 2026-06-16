@@ -73,13 +73,16 @@ class TestWindDirectionChart:
         assert "```mermaid" in md
         assert "xychart-beta" in md
         assert "line " in md
-        # Y 轴范围 1-8 + 方向映射在标题
+        # Y 轴用原始枚举 1-8 + 标题汉字映射
         assert "1 --> 8" in md
-        assert "1=N" in md
+        assert "1=正北" in md
+        # 8 个汉字方向名都该出现 (mermaid 标题 + ASCII Y 轴)
+        for cn in ("正北", "东北", "东", "东南", "南", "西南", "西", "西北"):
+            assert cn in md
         # ASCII 时序保留
         assert "█" in md
-        for en in ("N", "NE", "E", "SE", "S", "SW", "W", "NW"):
-            assert en in md
+        # 不应有英文缩写残留
+        assert "1=N " not in md  # 原英文映射
 
     def test_dominant_direction_summary(self) -> None:
         """主导风向: 出现最多的方向."""
