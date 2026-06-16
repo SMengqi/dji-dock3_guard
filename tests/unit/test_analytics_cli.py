@@ -155,3 +155,37 @@ class TestErrorPaths:
         index = (parent / "index.md").read_text()
         assert "⚠️" in index and "bad_rec" in index
         assert (parent / "rec_a" / "dock_guard_report" / "report.json").exists()
+
+    def test_existing_v2_report_friendly_error(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """老 v2 report.json (无 battery_samples) -> index.md 友好提示 + 不泄 Python 错."""
+        cfg = _seed_config(tmp_path)
+        parent = tmp_path / "recordings"
+        rec = _make_recording(parent / "rec_old")
+        # 注入 Stage 4-E 时代的 v2 report.json (无 battery_samples 字段)
+        dgr = rec / "dock_guard_report"
+        dgr.mkdir(parents=True, exist_ok=True)
+        (dgr / "report.json").write_text(json.dumps({
+            "schema_version": 2, "recording": "rec_old",
+            "dock_sn": "TEST_DOCK_01", "drone_sn": None,
+            "started_at_ms": 0, "ended_at_ms": 1000, "duration_ms": 1000,
+            "total_envelopes": 0, "envelope_counts_by_topic_key": {},
+            "phase_transitions": [], "verdicts": [], "alert_decisions": [],
+            "metrics": {
+                "peak_wind_gust_30s": None, "peak_wind_gust_30s_at_ms": None,
+                "min_battery_percent": None, "min_battery_percent_at_ms": None,
+                "longest_offline_ms": 0, "flight_duration_ms": 0,
+                "total_verdicts": 0, "total_dispatched": 0, "total_suppressed": 0,
+                "verdicts_by_code": {},
+            },
+        }), encoding="utf-8")
+        r = _run_cli(str(parent), "--config-dir", str(cfg))
+        assert r.returncode == 1   # 至少 1 个 ⚠️
+        index = (parent / "index.md").read_text()
+        assert "rec_old" in index
+        assert "⚠️" in index
+        # 友好提示, 不是裸 Python 错
+        assert "v2" in index and "--force" in index
+        # 老 Python error message 不应泄露
+        assert "missing 1 required positional argument" not in index
