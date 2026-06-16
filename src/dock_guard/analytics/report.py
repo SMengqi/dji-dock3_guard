@@ -39,6 +39,8 @@ def render_markdown(rep: FlightReport) -> str:
     parts.append("")
     parts.extend(_render_battery_chart(rep))
     parts.append("")
+    parts.extend(_render_wind_speed_chart(rep))
+    parts.append("")
     parts.extend(_render_wind_direction(rep))
     parts.append("")
     parts.extend(_render_phase_timeline(rep))
@@ -125,33 +127,6 @@ def _render_metrics(rep: FlightReport) -> list[str]:
     return lines
 
 
-def _render_battery_chart(rep: FlightReport) -> list[str]:
-    """Stage 5-F: 单架次 ASCII 电池曲线 (60 col 宽; 每行一个采样点)."""
-    samples = rep.battery_samples
-    if not samples:
-        return ["## 电池曲线", "", "(无电池数据)"]
-
-    lines = ["## 电池曲线", "", "```"]
-    width = 60
-    duration_min = max(1, (samples[-1].rel_ms - samples[0].rel_ms) // 60_000 + 1)
-    step = max(1, len(samples) // duration_min) if duration_min > 0 else 1
-    for s in samples[::step]:
-        rel_min = s.rel_ms // 60_000
-        pos = int(s.percent / 100 * (width - 1))
-        row = ["░"] * width
-        for i in range(max(0, pos - 2), min(width, pos + 2)):
-            row[i] = "█"
-        lines.append(f"  {s.percent:3d}% {''.join(row)}  +{rel_min}m")
-    lines.append("```")
-    lines.append("")
-    if len(samples) >= 2:
-        dp = samples[0].percent - samples[-1].percent
-        dm = (samples[-1].rel_ms - samples[0].rel_ms) / 60_000
-        if dm > 0:
-            lines.append(f"平均耗电速率: {dp / dm:.1f} %/分钟")
-    return lines
-
-
 # wind_direction enum_int -> (英文缩写, 中文名)
 _WIND_DIR_LABELS = [
     ("1", "N",  "正北"),
@@ -165,27 +140,145 @@ _WIND_DIR_LABELS = [
 ]
 
 
-def _render_wind_direction(rep: FlightReport) -> list[str]:
-    """风向分布直方图 (8 个方向, 按飞行秒数 + 百分比)."""
-    wd = rep.metrics.wind_direction_seconds
-    if not wd:
-        return ["## 风向分布", "", "(无风向数据)"]
+def _render_line_chart(
+    pairs: list[tuple[int, float]],
+    *,
+    height: int = 10,
+    width: int = 60,
+    y_min: float | None = None,
+    y_max: float | None = None,
+    y_labels: list[str] | None = None,
+    y_label_fmt=None,
+) -> list[str]:
+    """通用 ASCII 折线图.
 
-    total = sum(wd.values()) or 1
-    bar_width = 26   # ASCII 条最大宽度
-    lines = ["## 风向分布", "", "```"]
-    dominant_key, dominant_sec = max(wd.items(), key=lambda kv: kv[1])
-    for key, en, cn in _WIND_DIR_LABELS:
-        sec = wd.get(key, 0)
-        pct = 100 * sec / total
-        filled = int(pct / 100 * bar_width)
-        bar = "█" * filled + "░" * (bar_width - filled)
-        marker = "  <- 主导" if key == dominant_key and sec > 0 else ""
-        lines.append(f"  {cn:<3}  {en:<2}  {bar}  {pct:5.1f}% ({sec} 秒){marker}")
+    pairs: [(rel_ms, value)] 时序点
+    y_labels: 自定义 Y 轴 label (top → bottom 顺序; 高度需匹配 height)
+    y_label_fmt: 数值 -> str 函数 (优先于 y_labels)
+
+    返回: height + 2 行 (chart 行 + X 轴线 + X 轴 label).
+    """
+    if not pairs:
+        return ["(no data)"]
+    ys = [v for _, v in pairs]
+    xs = [t for t, _ in pairs]
+    if y_min is None:
+        y_min = min(ys)
+    if y_max is None:
+        y_max = max(ys)
+    if y_max <= y_min:
+        y_max = y_min + 1
+    x_min, x_max = xs[0], xs[-1]
+    if x_max <= x_min:
+        x_max = x_min + 1
+
+    grid = [["░"] * width for _ in range(height)]
+    for x, y in pairs:
+        col = int((x - x_min) / (x_max - x_min) * (width - 1))
+        col = max(0, min(width - 1, col))
+        # Y: 高值 -> 顶 (row 0); 低值 -> 底 (row height-1)
+        row = height - 1 - int((y - y_min) / (y_max - y_min) * (height - 1))
+        row = max(0, min(height - 1, row))
+        grid[row][col] = "█"
+
+    lines = []
+    for row in range(height):
+        if y_labels is not None and row < len(y_labels):
+            label = y_labels[row]
+        elif y_label_fmt is not None:
+            y_val = y_max - (y_max - y_min) * row / (height - 1)
+            label = y_label_fmt(y_val)
+        else:
+            y_val = y_max - (y_max - y_min) * row / (height - 1)
+            label = f"{y_val:5.1f}"
+        lines.append(f"  {label}  {''.join(grid[row])}")
+
+    pad = " " * (len(lines[0]) - width - 2)
+    duration_min = (x_max - x_min) / 60_000
+    lines.append(f"{pad}  {'─' * width}")
+    if duration_min >= 1:
+        x_right = f"{duration_min:.0f}m"
+    else:
+        x_right = f"{(x_max - x_min) // 1000}s"
+    lines.append(f"{pad}  0m{' ' * (width - 2 - len(x_right))}{x_right}")
+    return lines
+
+
+def _render_battery_chart(rep: FlightReport) -> list[str]:
+    """单架次 ASCII 电池折线图 (Y=百分比 0-100, X=时间)."""
+    samples = rep.battery_samples
+    if not samples:
+        return ["## 电池曲线", "", "(无电池数据)"]
+
+    pairs = [(s.rel_ms, float(s.percent)) for s in samples]
+    lines = ["## 电池曲线", "", "```"]
+    lines.extend(_render_line_chart(
+        pairs, height=10, width=60,
+        y_min=0, y_max=100,
+        y_label_fmt=lambda v: f"{round(v):3d}%",
+    ))
     lines.append("```")
     lines.append("")
-    dominant_cn = next(cn for k, en, cn in _WIND_DIR_LABELS if k == dominant_key)
-    lines.append(f"主导风向: {dominant_cn} ({dominant_sec} 秒)")
+    if len(samples) >= 2:
+        dp = samples[0].percent - samples[-1].percent
+        dm = (samples[-1].rel_ms - samples[0].rel_ms) / 60_000
+        if dm > 0:
+            lines.append(f"平均耗电速率: {dp / dm:.1f} %/分钟")
+    return lines
+
+
+def _render_wind_speed_chart(rep: FlightReport) -> list[str]:
+    """单架次 ASCII 风速折线图 (Y=m/s, X=时间)."""
+    samples = rep.battery_samples
+    if not samples:
+        return ["## 风速曲线", "", "(无风速数据)"]
+
+    pairs = [(s.rel_ms, s.wind_ms) for s in samples]
+    peak = max(s.wind_ms for s in samples)
+    avg = sum(s.wind_ms for s in samples) / len(samples)
+    # Y 范围: 0 -> ceil(peak); 最少 5 m/s 给低风场景视觉
+    import math
+    y_max = max(5.0, math.ceil(peak))
+
+    lines = ["## 风速曲线", "", "```"]
+    lines.extend(_render_line_chart(
+        pairs, height=8, width=60,
+        y_min=0, y_max=y_max,
+        y_label_fmt=lambda v: f"{v:4.1f}m/s",
+    ))
+    lines.append("```")
+    lines.append("")
+    lines.append(f"峰值阵风: {peak:.1f} m/s · 平均: {avg:.1f} m/s")
+    return lines
+
+
+def _render_wind_direction(rep: FlightReport) -> list[str]:
+    """单架次 ASCII 风向时序折线图 (Y=8 方向, X=时间)."""
+    # 只用有 wind_direction 的 sample
+    valid = [s for s in rep.battery_samples if s.wind_direction is not None]
+    if not valid:
+        return ["## 风向时序", "", "(无风向数据)"]
+
+    pairs = [(s.rel_ms, float(s.wind_direction)) for s in valid]
+    # Y labels top→bottom: 高 enum (NW=8) 在顶, 低 enum (N=1) 在底
+    y_labels = [f"{en:<2}" for _, en, _ in reversed(_WIND_DIR_LABELS)]
+
+    lines = ["## 风向时序", "", "```"]
+    lines.extend(_render_line_chart(
+        pairs, height=8, width=60,
+        y_min=1, y_max=8,
+        y_labels=y_labels,
+    ))
+    lines.append("```")
+    lines.append("")
+
+    # 主导方向
+    from collections import Counter
+    counts = Counter(s.wind_direction for s in valid)
+    dominant_key, dominant_count = counts.most_common(1)[0]
+    cn = next(cn for k, _, cn in _WIND_DIR_LABELS if int(k) == dominant_key)
+    pct = 100 * dominant_count / sum(counts.values())
+    lines.append(f"主导风向: {cn} ({pct:.0f}%)")
     return lines
 
 

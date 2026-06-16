@@ -51,8 +51,11 @@ class TestBatteryChart:
         md = render_markdown(_make_report(samples))
         assert "## 电池曲线" in md
         assert "█" in md
-        # 含 100% 和 25% 这两个边界值
-        assert "100" in md and "25" in md
+        # 折线图 Y 轴含 100% 和 0% 两个端点
+        assert "100%" in md
+        assert "0%" in md
+        # X 轴 5 分钟 -> "5m"
+        assert "5m" in md or "5min" in md
 
     def test_summary_avg_rate(self) -> None:
         """100% -> 40% in 5min => 12 %/min."""

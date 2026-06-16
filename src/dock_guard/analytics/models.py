@@ -21,6 +21,9 @@ class BatterySample:
     percent: int          # battery_capacity_percent (0-100)
     height_m: float       # drone height (m)
     wind_ms: float        # wind_gust_max_30s (m/s)
+    # wind_direction enum_int (1=N..8=NW), None 表示该采样时刻未上报
+    # 纯添加字段, schema_version 保持 3 (向前兼容).
+    wind_direction: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

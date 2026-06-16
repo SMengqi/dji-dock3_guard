@@ -1,7 +1,8 @@
-"""单架次报告"## 风向分布"段单测.
+"""单架次报告"## 风向时序"段单测.
 
-谁运行: pytest discover. 同义文件: 无. 数据: 合成 FlightMetrics + FlightReport.
-用户指令: "A" (选风向分布直方图).
+谁运行: pytest discover. 同义文件: 无.
+数据: 合成 BatterySample 带 wind_direction 字段.
+用户指令: "好的 已经看到风向分布图，能否将markdown中的电池、风向、风速 做成曲线图或折线图".
 """
 
 from __future__ import annotations
@@ -10,20 +11,20 @@ import re
 
 from dock_guard.analytics.models import (
     SCHEMA_VERSION,
+    BatterySample,
     FlightMetrics,
     FlightReport,
 )
 from dock_guard.analytics.report import render_markdown
 
 
-def _make_report(wd_seconds: dict[str, int]) -> FlightReport:
+def _make_report(samples: list[BatterySample]) -> FlightReport:
     m = FlightMetrics(
         peak_wind_gust_30s=None, peak_wind_gust_30s_at_ms=None,
         min_battery_percent=None, min_battery_percent_at_ms=None,
         longest_offline_ms=0, flight_duration_ms=0,
         total_verdicts=0, total_dispatched=0, total_suppressed=0,
-        verdicts_by_code={},
-        wind_direction_seconds=wd_seconds,
+        verdicts_by_code={}, wind_direction_seconds={},
     )
     return FlightReport(
         schema_version=SCHEMA_VERSION, recording="x",
@@ -32,48 +33,55 @@ def _make_report(wd_seconds: dict[str, int]) -> FlightReport:
         duration_ms=420000, total_envelopes=0,
         envelope_counts_by_topic_key={},
         phase_transitions=[], verdicts=[], alert_decisions=[],
-        metrics=m, battery_samples=[],
+        metrics=m, battery_samples=samples,
     )
 
 
-class TestWindDirectionSection:
-    def test_empty_renders_placeholder(self) -> None:
-        md = render_markdown(_make_report({}))
-        assert "## 风向分布" in md
+class TestWindDirectionChart:
+    def test_no_samples_placeholder(self) -> None:
+        md = render_markdown(_make_report([]))
+        assert "## 风向时序" in md
         assert "无风向数据" in md or "无数据" in md
 
-    def test_renders_histogram(self) -> None:
-        # 模拟飞行: 主导东北 (146 秒) + 西北 (104) + 东 (67) + 正北 (50)
-        wd = {"1": 50, "2": 146, "3": 67, "8": 104}
-        md = render_markdown(_make_report(wd))
-        assert "## 风向分布" in md
-        # 8 个方向中文名都该出现
-        for cn in ("正北", "东北", "东", "东南", "南", "西南", "西", "西北"):
-            assert cn in md
-        # ASCII 直方图标记
-        assert "█" in md
-        # 数值
-        assert "146" in md and "104" in md
+    def test_samples_without_direction_placeholder(self) -> None:
+        """有 battery_samples 但全部 wind_direction=None -> 占位."""
+        samples = [
+            BatterySample(rel_ms=0, percent=80, height_m=10, wind_ms=2.0,
+                          wind_direction=None),
+        ]
+        md = render_markdown(_make_report(samples))
+        assert "## 风向时序" in md
+        assert "无风向数据" in md or "无数据" in md
 
-    def test_shows_dominant_direction(self) -> None:
-        wd = {"1": 50, "2": 146, "3": 67}   # 2=东北 最大
-        md = render_markdown(_make_report(wd))
+    def test_renders_line_chart_with_direction_labels(self) -> None:
+        """折线图: Y 轴是 8 方向缩写, X 轴是时间."""
+        samples = [
+            BatterySample(rel_ms=0,       percent=100, height_m=10, wind_ms=2,
+                          wind_direction=1),  # N
+            BatterySample(rel_ms=60_000,  percent=85,  height_m=20, wind_ms=3,
+                          wind_direction=2),  # NE
+            BatterySample(rel_ms=120_000, percent=70,  height_m=30, wind_ms=3,
+                          wind_direction=2),  # NE
+            BatterySample(rel_ms=180_000, percent=55,  height_m=40, wind_ms=4,
+                          wind_direction=3),  # E
+            BatterySample(rel_ms=240_000, percent=40,  height_m=50, wind_ms=5,
+                          wind_direction=8),  # NW
+        ]
+        md = render_markdown(_make_report(samples))
+        assert "## 风向时序" in md
+        assert "█" in md
+        # Y 轴 8 个方向缩写
+        for en in ("N", "NE", "E", "SE", "S", "SW", "W", "NW"):
+            assert en in md
+
+    def test_dominant_direction_summary(self) -> None:
+        """主导风向: 出现最多的方向."""
+        samples = [
+            BatterySample(rel_ms=i * 10_000, percent=90, height_m=20, wind_ms=3,
+                          wind_direction=2 if i < 3 else 5)
+            for i in range(5)
+        ]   # 3 个 NE + 2 个 S -> 主导 NE
+        md = render_markdown(_make_report(samples))
         m = re.search(r"主导风向[:\s]+(\S+)", md)
         assert m is not None
         assert "东北" in m.group(1)
-
-    def test_zero_direction_renders_zero_percent(self) -> None:
-        """未出现的方向显示 0%."""
-        wd = {"2": 100}   # 只有东北
-        md = render_markdown(_make_report(wd))
-        # 应有 8 行: 7 个 0.0% + 1 个 100.0%
-        assert "100.0%" in md
-        assert md.count("0.0%") >= 7
-
-    def test_section_order(self) -> None:
-        """段落顺序: 关键指标 -> 电池曲线 -> 风向分布 -> 阶段时间线."""
-        md = render_markdown(_make_report({"2": 100}))
-        i_battery = md.find("## 电池曲线")
-        i_wind = md.find("## 风向分布")
-        i_phase = md.find("## 阶段时间线")
-        assert 0 < i_battery < i_wind < i_phase

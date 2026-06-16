@@ -109,14 +109,15 @@ async def _collect_async(
                     if (isinstance(batt, int) and 0 <= batt <= 100
                             and isinstance(height, (int, float))
                             and isinstance(wind, (int, float))):
+                        wd = frame.facts.get("wind_direction")
+                        wd_int = wd if isinstance(wd, int) and 1 <= wd <= 8 else None
                         battery_samples.append(BatterySample(
                             rel_ms=rel_ms, percent=batt,
                             height_m=float(height), wind_ms=float(wind),
+                            wind_direction=wd_int,
                         ))
-                        # 顺手采 wind_direction (10s 一格)
-                        wd = frame.facts.get("wind_direction")
-                        if isinstance(wd, int) and 1 <= wd <= 8:
-                            key = str(wd)
+                        if wd_int is not None:
+                            key = str(wd_int)
                             wind_direction_counts[key] = (
                                 wind_direction_counts.get(key, 0) + 1
                             )
