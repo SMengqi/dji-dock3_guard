@@ -24,6 +24,10 @@ class BatterySample:
     # wind_direction enum_int (1=N..8=NW), None 表示该采样时刻未上报
     # 纯添加字段, schema_version 保持 3 (向前兼容).
     wind_direction: int | None = None
+    # 飞行器速度时序 (m/s). None = 该采样时刻未上报.
+    # 纯添加字段, schema_version 保持 3 (向后兼容, 同 wind_direction).
+    horizontal_speed_ms: float | None = None   # OSD horizontal_speed (>=0)
+    vertical_speed_ms: float | None = None       # OSD vertical_speed (负=下降)
 
 
 @dataclass(frozen=True, slots=True)
