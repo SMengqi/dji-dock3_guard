@@ -203,3 +203,50 @@ class TestSerialization:
                     "total_verdicts", "total_dispatched", "total_suppressed",
                     "verdicts_by_code"):
             assert key in d["metrics"]
+
+
+def _speed_sequence() -> list[dict]:
+    """单帧 drone OSD 同时带 battery + height + wind_speed + 水平/垂直速度,
+    确保落一条 battery_sample 且带速度."""
+    base = 1700000000000
+    return [
+        {"recv_ts_ms": base, "topic": "sys/product/TEST_DOCK_01/status",
+         "payload": {"sub_type": 0}},
+        {"recv_ts_ms": base + 200, "topic": "thing/product/TEST_DOCK_01/osd",
+         "payload": {"data": {
+             "flighttask_step_code": 1, "drone_in_dock": 0,
+             "sub_device": {"device_sn": "TEST_DRONE_01"},
+         }, "timestamp": base + 200}},
+        {"recv_ts_ms": base + 300, "topic": "thing/product/TEST_DRONE_01/osd",
+         "payload": {"data": {
+             "mode_code": 0, "height": 30.0,
+             "wind_speed": 40,            # drone OSD 0.1 m/s -> 4.0 m/s
+             "wind_direction": 3,
+             "horizontal_speed": 8.5,
+             "vertical_speed": -1.2,
+             "battery": {"capacity_percent": 80},
+         }, "timestamp": base + 300}},
+    ]
+
+
+class TestSpeedSampling:
+    def test_battery_sample_carries_speed(self, tmp_path: pathlib.Path) -> None:
+        cfg = _seed_config(tmp_path)
+        rec = _make_recording(tmp_path, _speed_sequence())
+        rep = collect(rec, cfg)
+        assert rep.battery_samples, "expected at least one battery_sample"
+        s = rep.battery_samples[0]
+        assert s.horizontal_speed_ms == pytest.approx(8.5)
+        assert s.vertical_speed_ms == pytest.approx(-1.2)
+
+    def test_speed_none_when_absent(self, tmp_path: pathlib.Path) -> None:
+        cfg = _seed_config(tmp_path)
+        seq = _speed_sequence()
+        del seq[2]["payload"]["data"]["horizontal_speed"]
+        del seq[2]["payload"]["data"]["vertical_speed"]
+        rec = _make_recording(tmp_path, seq)
+        rep = collect(rec, cfg)
+        assert rep.battery_samples, "expected at least one battery_sample"
+        s = rep.battery_samples[0]
+        assert s.horizontal_speed_ms is None
+        assert s.vertical_speed_ms is None

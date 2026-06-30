@@ -111,10 +111,15 @@ async def _collect_async(
                             and isinstance(wind, (int, float))):
                         wd = frame.facts.get("wind_direction")
                         wd_int = wd if isinstance(wd, int) and 1 <= wd <= 8 else None
+                        hs = frame.facts.get("horizontal_speed")
+                        vs = frame.facts.get("vertical_speed")
+                        hs_f = float(hs) if isinstance(hs, (int, float)) else None
+                        vs_f = float(vs) if isinstance(vs, (int, float)) else None
                         battery_samples.append(BatterySample(
                             rel_ms=rel_ms, percent=batt,
                             height_m=float(height), wind_ms=float(wind),
                             wind_direction=wd_int,
+                            horizontal_speed_ms=hs_f, vertical_speed_ms=vs_f,
                         ))
                         if wd_int is not None:
                             key = str(wd_int)
