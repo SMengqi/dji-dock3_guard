@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>飞行复盘详情</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; color: #222; }
+    a { color: #0066cc; text-decoration: none; }
+    #summary { margin: 1rem 0; color: #444; }
+    .chart { width: 100%; height: 340px; margin: 1.2rem 0; }
+    .nodata { color: #999; padding: 2rem 0; }
+  </style>
+</head>
+<body>
+  <a href="/">← 返回索引</a>
+  <h1 id="title">飞行复盘</h1>
+  <div id="summary"></div>
+  <div id="chart-battery" class="chart"></div>
+  <div id="chart-speed" class="chart"></div>
+  <div id="chart-windspeed" class="chart"></div>
+  <div id="chart-winddir" class="chart"></div>
+  <script src="/static/echarts.min.js"></script>
+  <script src="/static/app.js"></script>
+  <script>renderDetail();</script>
+</body>
+</html>

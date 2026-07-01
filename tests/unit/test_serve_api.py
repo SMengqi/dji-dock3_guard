@@ -41,3 +41,24 @@ def test_api_report_traversal_404(tmp_path: Path) -> None:
     c = _client(tmp_path)
     # 编码后的 ../ 也必须挡住
     assert c.get("/api/reports/..%2F..%2Fetc").status_code == 404
+
+
+def test_index_html(tmp_path: Path) -> None:
+    c = _client(tmp_path)
+    resp = c.get("/")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+def test_detail_html(tmp_path: Path) -> None:
+    c = _client(tmp_path)
+    resp = c.get("/r/rec1")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+
+
+def test_static_app_js_served(tmp_path: Path) -> None:
+    c = _client(tmp_path)
+    resp = c.get("/static/app.js")
+    assert resp.status_code == 200
+    assert "renderDetail" in resp.text

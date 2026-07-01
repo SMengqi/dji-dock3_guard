@@ -15,6 +15,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from dock_guard.analytics.serve.scanner import resolve_report, scan_reports
 
@@ -34,5 +35,16 @@ def build_report_app(reports_root: Path) -> FastAPI:
         if rp is None:
             raise HTTPException(status_code=404, detail="report not found")
         return FileResponse(rp, media_type="application/json")
+
+    @app.get("/")
+    def index() -> FileResponse:
+        return FileResponse(_STATIC / "index.html", media_type="text/html")
+
+    @app.get("/r/{recording}")
+    def detail(recording: str) -> FileResponse:
+        # 详情页外壳固定; 具体 recording 由前端 JS 从 URL 读并拉 /api/reports/{name}
+        return FileResponse(_STATIC / "detail.html", media_type="text/html")
+
+    app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
     return app
