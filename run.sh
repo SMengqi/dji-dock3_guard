@@ -23,6 +23,13 @@
 #                        默认目录见脚本顶部 DEFAULT_BATTERY_DIR
 #                        额外参数: --out <dir>  --min-samples N  --quiet
 #
+# 复盘图表 Web 查看器 (只读, 无鉴权; nohup 后台, 走 status/stop/logs):
+#   viewer [reports父目录] [host] [port]
+#                        起 web 服务, 浏览器看电池/速度/风速/风向交互图表.
+#                        reports父目录 = 含 <recording>/dock_guard_report/report.json 的父目录
+#                        默认目录见脚本顶部 DEFAULT_VIEWER_DIR; 默认监听 127.0.0.1:8080
+#                        对外访问传 0.0.0.0: ./run.sh viewer <目录> 0.0.0.0
+#
 # 管理:
 #   status               查看各模式运行状态
 #   stop <模式>          优雅停止某模式 (SIGTERM -> graceful close, 30s 内未退则 SIGKILL)
@@ -35,6 +42,8 @@
 #   ./run.sh analytics                                                 # 默认目录, 批量出报告 + index.md
 #   ./run.sh analytics ../sim_dji_cloud/recordings/8UU.../             # 单架次报告
 #   ./run.sh analytics recordings/ --out /tmp/reports/ --force         # 输出到独立目录 + 强重跑
+#   ./run.sh viewer                                                    # 起 web 查看器 (127.0.0.1:8080)
+#   ./run.sh viewer recordings/ 0.0.0.0 8080                           # 对外访问 + 指定目录/端口
 #   ./run.sh live                                                      # 启动实时
 #   ./run.sh status                                                    # 看哪些在跑
 #   ./run.sh logs live                                                 # 跟踪 live 日志
@@ -60,6 +69,12 @@ DEFAULT_ANALYTICS_DIR="../sim_dji_cloud_service/sim_dji_cloud/recordings"
 
 # Stage 5-F 电池分析默认父目录 (要求子目录都已 Stage 4-E 出 v3 report.json)
 DEFAULT_BATTERY_DIR="../sim_dji_cloud_service/sim_dji_cloud/recordings"
+
+# 复盘图表 web 查看器: reports 父目录 (同 analytics; 报告就地写在各录制 dock_guard_report/)
+DEFAULT_VIEWER_DIR="../sim_dji_cloud_service/sim_dji_cloud/recordings"
+# 查看器监听: 默认仅本机 127.0.0.1; 对外访问传 0.0.0.0 (无鉴权, 内网用)
+DEFAULT_VIEWER_HOST="127.0.0.1"
+DEFAULT_VIEWER_PORT="8080"
 
 # python -m dock_guard 的额外参数 (config-dir / data-dir 一般走自动检测, 不必填)
 EXTRA_ARGS=""
@@ -148,7 +163,7 @@ status() {
 }
 
 usage() {
-  sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,53p' "$0" | sed 's/^# \{0,1\}//'
   cat <<'EOF'
 
 admin 子命令 (Stage 2 控制面, 走 .env 的 ADMIN_TOKEN):
@@ -296,6 +311,20 @@ case "$mode" in
     fi
     # 透传剩余参数 (--out / --min-samples / --quiet 等)
     exec python -m dock_guard.analytics.analyzers.battery "$dir" "$@"
+    ;;
+  viewer)
+    # 飞行复盘 web 图表查看器 (只读, 无鉴权; nohup 后台, 走 status/stop/logs).
+    # reports父目录 = 含 <recording>/dock_guard_report/report.json 的父目录.
+    dir="${1:-$DEFAULT_VIEWER_DIR}"
+    host="${2:-$DEFAULT_VIEWER_HOST}"
+    port="${3:-$DEFAULT_VIEWER_PORT}"
+    if [ ! -d "$dir" ]; then
+      echo "[run] viewer reports 目录不存在: $dir" >&2
+      echo "       提示: 改脚本顶部 DEFAULT_VIEWER_DIR 或 ./run.sh viewer <目录> [host] [port]" >&2
+      exit 2
+    fi
+    launch viewer python -m dock_guard.analytics.serve "$dir" --host "$host" --port "$port"
+    echo "[run] 浏览器打开: http://${host}:${port}/"
     ;;
   status)
     status
