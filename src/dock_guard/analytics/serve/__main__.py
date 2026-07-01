@@ -2,7 +2,7 @@
 
 用法:
     python -m dock_guard.analytics.serve <reports_root>
-    python -m dock_guard.analytics.serve <reports_root> --host 127.0.0.1 --port 8080
+    python -m dock_guard.analytics.serve <reports_root> --host 0.0.0.0 --port 8080
 
 <reports_root> = 批量分析父目录, 含 <recording>/dock_guard_report/report.json.
 """
@@ -25,7 +25,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("reports_root", type=Path,
                    help="批量分析父目录 (含 <recording>/dock_guard_report/report.json)")
-    p.add_argument("--host", default="0.0.0.0", help="监听地址 (默认 0.0.0.0)")
+    p.add_argument("--host", default="127.0.0.1",
+                   help="监听地址 (默认 127.0.0.1 仅本机; 对外用 --host 0.0.0.0)")
     p.add_argument("--port", type=int, default=8080, help="监听端口 (默认 8080)")
     return p
 

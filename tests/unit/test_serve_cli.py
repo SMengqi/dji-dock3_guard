@@ -10,9 +10,14 @@ from tests.unit._serve_helpers import write_sample_report
 
 def test_parser_defaults() -> None:
     args = build_parser().parse_args(["/some/root"])
-    assert args.host == "0.0.0.0"
+    assert args.host == "127.0.0.1"
     assert args.port == 8080
     assert str(args.reports_root) == "/some/root"
+
+
+def test_parser_host_override() -> None:
+    args = build_parser().parse_args(["/some/root", "--host", "0.0.0.0"])
+    assert args.host == "0.0.0.0"
 
 
 def test_main_missing_root_returns_2(tmp_path: Path) -> None:
