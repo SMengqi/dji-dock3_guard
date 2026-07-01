@@ -20,7 +20,7 @@ import traceback
 from pathlib import Path
 
 from dock_guard.analytics.collector import collect
-from dock_guard.analytics.models import BatterySample, FlightMetrics, FlightReport
+from dock_guard.analytics.models import BatterySample, FlightMetrics, FlightReport, FlightSample
 from dock_guard.analytics.report import (
     render_index_md,
     render_json,
@@ -170,9 +170,9 @@ def _process_batch(
 def _from_dict(d: dict) -> FlightReport:
     """反序列化已有 report.json. v2 旧 schema 抛友好错误, 引导 --force 升级."""
     schema = d.get("schema_version", 0)
-    if schema != 3:
+    if schema not in (3, 4):
         raise ValueError(
-            f"v{schema} schema 旧报告 (当前 v3); 用 --force 重跑升级"
+            f"v{schema} schema 旧报告 (当前 v4); 用 --force 重跑升级"
         )
     return FlightReport(
         schema_version=d["schema_version"],
@@ -189,6 +189,7 @@ def _from_dict(d: dict) -> FlightReport:
         alert_decisions=d["alert_decisions"],
         metrics=FlightMetrics(**d["metrics"]),
         battery_samples=[BatterySample(**s) for s in d.get("battery_samples", [])],
+        flight_samples=[FlightSample(**s) for s in d.get("flight_samples", [])],
     )
 
 

@@ -91,7 +91,7 @@ def _make_long_recording(tmp_path: pathlib.Path, duration_s: int = 60) -> pathli
 
 class TestSchemaV3:
     def test_schema_version_is_3(self) -> None:
-        assert SCHEMA_VERSION == 3
+        assert SCHEMA_VERSION == 4
 
 
 class TestBatterySamples:
@@ -125,7 +125,7 @@ class TestBatterySamples:
         rec = _make_long_recording(tmp_path, 30)
         rep = collect(rec, cfg)
         d = rep.to_dict()
-        assert d["schema_version"] == 3
+        assert d["schema_version"] == 4
         assert "battery_samples" in d
         # JSON safe
         json.dumps(d)

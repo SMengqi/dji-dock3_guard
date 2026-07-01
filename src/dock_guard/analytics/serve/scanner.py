@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-_SCHEMA_OK = 3
+_SCHEMA_OK = frozenset({3, 4})
 _SUBPATH = ("dock_guard_report", "report.json")
 
 
@@ -38,11 +38,11 @@ def _summarize(recording: str, rp: Path) -> dict[str, Any]:
     except Exception as e:  # 容错: 任意坏文件都标记不崩
         return {"recording": recording, "ok": False, "error": f"解析失败: {e}"}
     schema = d.get("schema_version", 0)
-    if schema != _SCHEMA_OK:
+    if schema not in _SCHEMA_OK:
         return {
             "recording": recording,
             "ok": False,
-            "error": f"schema v{schema} 旧报告 (需 v{_SCHEMA_OK})",
+            "error": f"schema v{schema} 旧报告 (需 v3/v4)",
         }
     m = d.get("metrics", {})
     return {

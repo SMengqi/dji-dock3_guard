@@ -44,7 +44,7 @@ class TestE2E:
         cfg = _seed_config(tmp_path)
         rep = collect(recording, cfg)
         d = rep.to_dict()
-        assert d["schema_version"] == 3
+        assert d["schema_version"] == 4
         assert d["dock_sn"] == "8UUXN7N00A0GAA"
         codes = set(d["metrics"]["verdicts_by_code"].keys())
         # demo 模式阈值在真实录制上至少触发这俩

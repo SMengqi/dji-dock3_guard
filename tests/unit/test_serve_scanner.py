@@ -59,3 +59,9 @@ def test_resolve_rejects_traversal_and_missing(tmp_path: Path) -> None:
 def test_resolve_rejects_nul_byte(tmp_path: Path) -> None:
     write_sample_report(tmp_path, "rec1")
     assert resolve_report(tmp_path, "a\x00b") is None
+
+
+def test_scan_accepts_v4(tmp_path: Path) -> None:
+    write_sample_report(tmp_path, "v4rec", schema=4)
+    rows = scan_reports(tmp_path)
+    assert rows[0]["ok"] is True
