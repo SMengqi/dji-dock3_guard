@@ -39,6 +39,8 @@ def render_markdown(rep: FlightReport) -> str:
     parts.append("")
     parts.extend(_render_battery_chart(rep))
     parts.append("")
+    parts.extend(_render_speed_chart(rep))
+    parts.append("")
     parts.extend(_render_wind_speed_chart(rep))
     parts.append("")
     parts.extend(_render_wind_direction(rep))
@@ -282,6 +284,82 @@ def _render_battery_chart(rep: FlightReport) -> list[str]:
         dm = (samples[-1].rel_ms - samples[0].rel_ms) / 60_000
         if dm > 0:
             lines.append(f"平均耗电速率: {dp / dm:.1f} %/分钟")
+    return lines
+
+
+def _render_speed_chart(rep: FlightReport) -> list[str]:
+    """速度曲线: 水平 (主图, y>=0) + 垂直 (副图, 支持负值). 各 mermaid + ASCII."""
+    import math
+
+    lines: list[str] = []
+
+    # ── 水平速度 (主图) ──
+    h = [s for s in rep.battery_samples if s.horizontal_speed_ms is not None]
+    lines.append("## 水平速度曲线")
+    lines.append("")
+    if not h:
+        lines.append("(无速度数据)")
+    else:
+        duration_min = max(1, (h[-1].rel_ms - h[0].rel_ms) // 60_000 + 1)
+        minute_values = _aggregate_per_minute(
+            h, value_func=lambda s: s.horizontal_speed_ms, duration_min=duration_min,
+        )
+        peak = max(s.horizontal_speed_ms for s in h)
+        avg = sum(s.horizontal_speed_ms for s in h) / len(h)
+        y_max = max(5.0, math.ceil(peak))
+        lines.extend(_mermaid_line(
+            title="水平速度", x_labels=list(range(duration_min)),
+            y_label="m/s", values=minute_values, y_max=y_max,
+        ))
+        lines.append("")
+        lines.append("终端文本图:")
+        lines.append("")
+        lines.append("```")
+        pairs = [(s.rel_ms, s.horizontal_speed_ms) for s in h]
+        lines.extend(_render_line_chart(
+            pairs, height=8, width=60, y_min=0, y_max=y_max,
+            y_label_fmt=lambda v: f"{v:4.1f}m/s",
+        ))
+        lines.append("```")
+        lines.append("")
+        lines.append(f"峰值 {peak:.1f} m/s · 平均 {avg:.1f} m/s")
+
+    lines.append("")
+
+    # ── 垂直速度 (副图, 正=上升 负=下降) ──
+    v = [s for s in rep.battery_samples if s.vertical_speed_ms is not None]
+    lines.append("## 垂直速度曲线")
+    lines.append("")
+    if not v:
+        lines.append("(无速度数据)")
+        return lines
+
+    duration_min = max(1, (v[-1].rel_ms - v[0].rel_ms) // 60_000 + 1)
+    minute_values = _aggregate_per_minute(
+        v, value_func=lambda s: s.vertical_speed_ms, duration_min=duration_min,
+    )
+    vmax = max(s.vertical_speed_ms for s in v)
+    vmin = min(s.vertical_speed_ms for s in v)
+    y_max = max(2.0, math.ceil(vmax))
+    y_min = min(-2.0, math.floor(vmin))
+    lines.extend(_mermaid_line(
+        title="垂直速度 (正=上升 负=下降)", x_labels=list(range(duration_min)),
+        y_label="m/s", values=minute_values, y_max=y_max, y_min=y_min,
+    ))
+    lines.append("")
+    lines.append("终端文本图:")
+    lines.append("")
+    lines.append("```")
+    pairs = [(s.rel_ms, s.vertical_speed_ms) for s in v]
+    lines.extend(_render_line_chart(
+        pairs, height=8, width=60, y_min=y_min, y_max=y_max,
+        y_label_fmt=lambda val: f"{val:+5.1f}",
+    ))
+    lines.append("```")
+    lines.append("")
+    max_up = max(0.0, vmax)
+    max_down = abs(min(0.0, vmin))
+    lines.append(f"最大上升 {max_up:.1f} m/s · 最大下降 {max_down:.1f} m/s")
     return lines
 
 
