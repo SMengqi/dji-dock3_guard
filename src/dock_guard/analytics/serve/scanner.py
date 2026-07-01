@@ -63,7 +63,7 @@ def resolve_report(reports_root: Path, recording: str) -> Path | None:
     try:
         root = reports_root.resolve()
         rp = root.joinpath(recording, *_SUBPATH).resolve()
-    except OSError:
+    except (OSError, ValueError):
         return None
     if root not in rp.parents:
         return None

@@ -54,3 +54,8 @@ def test_resolve_rejects_traversal_and_missing(tmp_path: Path) -> None:
     assert resolve_report(tmp_path, "../etc") is None
     assert resolve_report(tmp_path, "a/b") is None
     assert resolve_report(tmp_path, "nope") is None
+
+
+def test_resolve_rejects_nul_byte(tmp_path: Path) -> None:
+    write_sample_report(tmp_path, "rec1")
+    assert resolve_report(tmp_path, "a\x00b") is None
