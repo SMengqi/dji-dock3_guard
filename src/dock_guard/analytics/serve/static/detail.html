@@ -10,16 +10,30 @@
     #summary { margin: 1rem 0; color: #444; }
     .chart { width: 100%; height: 340px; margin: 1.2rem 0; }
     .nodata { color: #999; padding: 2rem 0; }
+    /* 两栏 (列优先): 左栏 电池·速度, 右栏 风速·风向 */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: repeat(2, auto);
+      grid-auto-flow: column;
+      gap: 0 1.5rem;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .charts-grid { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-flow: row; }
+    }
   </style>
 </head>
 <body>
   <a href="/">← 返回索引</a>
   <h1 id="title">飞行复盘</h1>
   <div id="summary"></div>
-  <div id="chart-battery" class="chart"></div>
-  <div id="chart-speed" class="chart"></div>
-  <div id="chart-windspeed" class="chart"></div>
-  <div id="chart-winddir" class="chart"></div>
+  <div class="charts-grid">
+    <div id="chart-battery" class="chart"></div>
+    <div id="chart-speed" class="chart"></div>
+    <div id="chart-windspeed" class="chart"></div>
+    <div id="chart-winddir" class="chart"></div>
+  </div>
   <script src="/static/echarts.min.js"></script>
   <script src="/static/app.js"></script>
   <script>renderDetail();</script>

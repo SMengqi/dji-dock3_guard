@@ -11,6 +11,18 @@
     #summary { margin: 1rem 0; color: #444; }
     .panel { width: 100%; height: 220px; margin: .4rem 0; }
     .nodata { color: #999; padding: 1rem 0; }
+    /* 两栏 (列优先): 左栏 高度·速度·姿态, 右栏 RTK·DRC */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: repeat(3, auto);
+      grid-auto-flow: column;
+      gap: 0 1.5rem;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .charts-grid { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-flow: row; }
+    }
   </style>
 </head>
 <body>
@@ -18,11 +30,13 @@
   <h1 id="title">飞行安全视图</h1>
   <div id="warn"></div>
   <div id="summary"></div>
-  <div id="p-height" class="panel"></div>
-  <div id="p-speed" class="panel"></div>
-  <div id="p-attitude" class="panel"></div>
-  <div id="p-rtk" class="panel"></div>
-  <div id="p-drc" class="panel"></div>
+  <div class="charts-grid">
+    <div id="p-height" class="panel"></div>
+    <div id="p-speed" class="panel"></div>
+    <div id="p-attitude" class="panel"></div>
+    <div id="p-rtk" class="panel"></div>
+    <div id="p-drc" class="panel"></div>
+  </div>
   <script src="/static/echarts.min.js"></script>
   <script src="/static/app.js"></script>
   <script>renderSafety();</script>
