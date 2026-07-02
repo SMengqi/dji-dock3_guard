@@ -276,3 +276,15 @@ function safDrc(id, fs) {
     series: [{ name: "DRC", type: "line", step: "end", showSymbol: false, connectNulls: false, data: pts }] });
   return c;
 }
+
+// ── 窗口缩放自适应: 重绘所有 ECharts 面板 (详情 .chart / 安全 .panel), 轻量防抖 ──
+let _resizeTimer = null;
+window.addEventListener("resize", function () {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(function () {
+    document.querySelectorAll(".chart, .panel").forEach(function (el) {
+      const inst = echarts.getInstanceByDom(el);
+      if (inst) inst.resize();
+    });
+  }, 150);
+});
