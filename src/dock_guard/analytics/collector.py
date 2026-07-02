@@ -20,13 +20,25 @@ from dock_guard.analytics.models import (
     BatterySample,
     FlightMetrics,
     FlightReport,
+    FlightSample,
 )
 from dock_guard.config import load_app_config
 from dock_guard.coordinator import AlertCoordinator, NullAlertSink
 from dock_guard.ingest import ReplaySource
 from dock_guard.rules import RuleEngine
+from dock_guard.types import TopicKey
 
 SAMPLE_INTERVAL_MS = 10_000   # Stage 5-F: 每 10s 采一次 battery_samples
+
+
+def _facts_float(facts: Mapping[str, Any], key: str) -> float | None:
+    v = facts.get(key)
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def _facts_int(facts: Mapping[str, Any], key: str) -> int | None:
+    v = facts.get(key)
+    return int(v) if isinstance(v, int) and not isinstance(v, bool) else None
 
 
 def collect(
@@ -77,6 +89,7 @@ async def _collect_async(
 
     # Stage 5-F: 10s 间隔的 battery_samples 时序
     battery_samples: list[BatterySample] = []
+    flight_samples: list[FlightSample] = []
     next_sample_rel_ms = 0
     # 风向计数 (10s 一格 -> 秒数 = count * 10)
     wind_direction_counts: dict[str, int] = {}
@@ -127,6 +140,25 @@ async def _collect_async(
                                 wind_direction_counts.get(key, 0) + 1
                             )
                         next_sample_rel_ms += SAMPLE_INTERVAL_MS
+
+        if (frame is not None and first_ts is not None
+                and env.topic_key == TopicKey.DRONE_OSD):
+            f = frame.facts
+            fixed = f.get("rtk_fixed")
+            drc = f.get("drc_state")
+            flight_samples.append(FlightSample(
+                rel_ms=env.recv_ts_ms - first_ts,
+                height_m=_facts_float(f, "height"),
+                vertical_speed_ms=_facts_float(f, "vertical_speed"),
+                horizontal_speed_ms=_facts_float(f, "horizontal_speed"),
+                attitude_head=_facts_float(f, "attitude_head"),
+                attitude_pitch=_facts_float(f, "attitude_pitch"),
+                attitude_roll=_facts_float(f, "attitude_roll"),
+                gps_number=_facts_int(f, "gps_number"),
+                rtk_number=_facts_int(f, "rtk_number"),
+                is_fixed=bool(fixed) if isinstance(fixed, bool) else None,
+                drc_state=str(drc) if drc is not None else None,
+            ))
 
         for tr in agg.drain_phase_transitions():
             phase_transitions.append({
@@ -214,6 +246,7 @@ async def _collect_async(
         alert_decisions=alert_decisions,
         metrics=metrics,
         battery_samples=battery_samples,
+        flight_samples=flight_samples,
     )
 
 
