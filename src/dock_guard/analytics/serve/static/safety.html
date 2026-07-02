@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>飞行安全视图</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; color: #222; }
+    a { color: #0066cc; text-decoration: none; }
+    #warn { color: #b00; margin: 1rem 0; }
+    #summary { margin: 1rem 0; color: #444; }
+    .panel { width: 100%; height: 220px; margin: .4rem 0; }
+    .nodata { color: #999; padding: 1rem 0; }
+  </style>
+</head>
+<body>
+  <a href="/">← 返回索引</a>
+  <h1 id="title">飞行安全视图</h1>
+  <div id="warn"></div>
+  <div id="summary"></div>
+  <div id="p-height" class="panel"></div>
+  <div id="p-speed" class="panel"></div>
+  <div id="p-attitude" class="panel"></div>
+  <div id="p-rtk" class="panel"></div>
+  <div id="p-drc" class="panel"></div>
+  <script src="/static/echarts.min.js"></script>
+  <script src="/static/app.js"></script>
+  <script>renderSafety();</script>
+</body>
+</html>

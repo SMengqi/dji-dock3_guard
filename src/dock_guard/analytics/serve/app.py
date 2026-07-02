@@ -45,6 +45,11 @@ def build_report_app(reports_root: Path) -> FastAPI:
         # 详情页外壳固定; 具体 recording 由前端 JS 从 URL 读并拉 /api/reports/{name}
         return FileResponse(_STATIC / "detail.html", media_type="text/html")
 
+    @app.get("/safety/{recording}")
+    def safety(recording: str) -> FileResponse:
+        # 安全视图外壳; recording 由前端 JS 从 URL 读并拉 /api/reports/{name}
+        return FileResponse(_STATIC / "safety.html", media_type="text/html")
+
     app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
     return app
