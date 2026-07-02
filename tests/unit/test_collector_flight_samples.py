@@ -62,7 +62,7 @@ def _make_recording(tmp_path: pathlib.Path, n_osd: int = 20) -> pathlib.Path:
                 "attitude_pitch": 1.0 + t, "attitude_roll": -2.0,
                 "attitude_head": 90.0,
                 "battery": {"capacity_percent": 100 - t},
-                "position_state": {"is_fixed": 1},
+                "position_state": {"is_fixed": 1, "gps_number": 14, "rtk_number": 22},
             }, "timestamp": ts + 200},
         })
     with (rec / "topics" / "x.jsonl").open("w", encoding="utf-8") as f:
@@ -111,3 +111,11 @@ def test_flight_samples_monotonic(tmp_path: pathlib.Path) -> None:
     rep = collect(_make_recording(tmp_path, 15), cfg)
     ts = [s.rel_ms for s in rep.flight_samples]
     assert ts == sorted(ts)
+
+
+def test_flight_samples_have_gps_rtk(tmp_path: pathlib.Path) -> None:
+    cfg = _seed_config(tmp_path)
+    rep = collect(_make_recording(tmp_path, 20), cfg)
+    last = rep.flight_samples[-1]
+    assert last.gps_number == 14
+    assert last.rtk_number == 22

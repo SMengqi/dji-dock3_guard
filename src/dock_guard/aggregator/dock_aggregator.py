@@ -161,11 +161,16 @@ class DockAggregator:
             self._drone_fields[k] = v
 
         position_state = data.get("position_state")
-        if isinstance(position_state, dict) and "is_fixed" in position_state:
-            self._drone_fields["rtk_is_fixed_code"] = position_state["is_fixed"]
-            self._drone_fields["rtk_fixed"] = (
-                position_state["is_fixed"] == RtkFixedCode.FIXING_SUCCESSFUL.value
-            )
+        if isinstance(position_state, dict):
+            if "is_fixed" in position_state:
+                self._drone_fields["rtk_is_fixed_code"] = position_state["is_fixed"]
+                self._drone_fields["rtk_fixed"] = (
+                    position_state["is_fixed"] == RtkFixedCode.FIXING_SUCCESSFUL.value
+                )
+            if "gps_number" in position_state:
+                self._drone_fields["gps_number"] = position_state["gps_number"]
+            if "rtk_number" in position_state:
+                self._drone_fields["rtk_number"] = position_state["rtk_number"]
 
         battery = data.get("battery")
         if isinstance(battery, dict):
@@ -317,6 +322,8 @@ class DockAggregator:
             ("battery_remain_flight_time", F.BATTERY_REMAIN_FLIGHT_TIME),
             ("rtk_fixed", F.RTK_FIXED),
             ("rtk_is_fixed_code", F.RTK_IS_FIXED_CODE),
+            ("gps_number", F.GPS_NUMBER),
+            ("rtk_number", F.RTK_NUMBER),
         ):
             if key in self._drone_fields:
                 facts[fname] = self._drone_fields[key]
