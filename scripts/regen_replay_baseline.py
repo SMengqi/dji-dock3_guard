@@ -26,7 +26,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.insert(0, str(REPO_ROOT))
 
-from tests.replay._helpers import run_replay_collect, stage_config_dir   # noqa: E402
+from tests.replay._helpers import run_replay_collect, stage_config_dir  # noqa: E402
 
 _DEFAULT_RECORDING = (
     REPO_ROOT.parent

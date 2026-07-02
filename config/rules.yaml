@@ -1,9 +1,5 @@
 # config/rules.yaml — Phase 4 启动子集 (设计 §5.3)
 # 所有规则只产生告警, 任何 level 都不下发指令 (设计 §5.4).
-#
-# ⚠️ 当前阈值为 "demo 模式" — 故意调低以便钉钉群常有告警可观察.
-# 注释 (orig: ...) 给出 spec 锁定的生产阈值, 上线前必须还原.
-# 还原方法: 一行行把 value 改回 orig, 然后 ./run.sh admin reload.
 
 version: 2
 
@@ -15,21 +11,21 @@ defaults:
 # ── 起飞前硬条件 ────────────────────────────────────────────────────
 preflight_block:
   - id: preflight.wind_exceeded
-    desc: 起飞前阵风窗口峰值超阈值
+    desc: 起飞前阵风窗口峰值超 12 m/s
     phase: [PREFLIGHT]
     all:
-      - { fact: wind_gust_max_30s, op: ">", value: 3.0 }   # orig: 12.0 m/s
+      - { fact: wind_gust_max_30s, op: ">", value: 12.0 }
     verdict:
       level: block
       code: PREFLIGHT_WIND_EXCEEDED
       suggested_action: reject_takeoff
 
   - id: preflight.dock_tilt
-    desc: 起飞前机场倾角异常
+    desc: 起飞前机场倾角 > 3 度
     phase: [PREFLIGHT]
     all:
       - { fact: tilt_angle_valid, op: "==", value: 1 }
-      - { fact: tilt_angle_value, op: ">", value: 0.5 }    # orig: 3.0 度
+      - { fact: tilt_angle_value, op: ">", value: 3.0 }
     verdict:
       level: block
       code: PREFLIGHT_DOCK_TILT
@@ -66,10 +62,10 @@ preflight_block:
       suggested_action: reject_takeoff
 
   - id: preflight.heavy_rain
-    desc: 起飞前降雨
+    desc: 起飞前重雨
     phase: [PREFLIGHT]
     all:
-      - { fact: rainfall, op: ">=", value: 1 }              # orig: 3 (heavy); DJI 枚举 0/1/2/3
+      - { fact: rainfall, op: ">=", value: 3 }
     verdict:
       level: block
       code: PREFLIGHT_HEAVY_RAIN
@@ -78,31 +74,31 @@ preflight_block:
 # ── 飞行中环境恶化 ────────────────────────────────────────────────────
 inflight_escalate:
   - id: inflight.wind_gust
-    desc: 飞行中阵风窗口峰值超阈值
+    desc: 飞行中阵风窗口峰值超 14 m/s 持续 3s
     phase: [TAKEOFF, CRUISE, AVOIDANCE]
     all:
-      - { fact: wind_gust_max_30s, op: ">", value: 4.0 }    # orig: 14.0 m/s
-    dwell_enter_ms: 0                                       # orig: 3000 (持续 3s 才告)
+      - { fact: wind_gust_max_30s, op: ">", value: 14.0 }
+    dwell_enter_ms: 3000
     verdict:
       level: return
       code: INFLIGHT_WIND_GUST
       suggested_action: return_home
 
   - id: inflight.battery_low
-    desc: 飞行中电量低于阈值
+    desc: 飞行中电量低于返航功率阈值
     phase: [TAKEOFF, CRUISE, AVOIDANCE]
     all:
-      - { fact: battery_capacity_percent, op: "<=", value: 95 }   # orig: fact_ref battery_return_home_power (~30%)
+      - { fact: battery_capacity_percent, op: "<=", fact_ref: battery_return_home_power }
     verdict:
       level: return
       code: INFLIGHT_BATTERY_LOW
       suggested_action: return_home
 
   - id: inflight.heavy_rain
-    desc: 飞行中降雨升级
+    desc: 飞行中重雨升级
     phase: [TAKEOFF, CRUISE, AVOIDANCE]
     all:
-      - { fact: rainfall, op: ">=", value: 1 }              # orig: 3
+      - { fact: rainfall, op: ">=", value: 3 }
     verdict:
       level: return
       code: INFLIGHT_HEAVY_RAIN
@@ -111,10 +107,10 @@ inflight_escalate:
 # ── 运维顾问 ─────────────────────────────────────────────────────────
 maintenance_advisory:
   - id: maint.warming_up
-    desc: 系统冷启动 warming_up 期内
+    desc: 系统冷启动 warming_up 期内 (info 提示)
     all:
       - { fact: warming_up, op: "==", value: true }
-    cooldown_ms: 60000                                      # orig: 86400000 (24h, 防天天提醒)
+    cooldown_ms: 86400000
     verdict:
       level: info
       code: WARMING_UP

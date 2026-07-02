@@ -47,9 +47,9 @@ class TestE2E:
         assert d["schema_version"] == 4
         assert d["dock_sn"] == "8UUXN7N00A0GAA"
         codes = set(d["metrics"]["verdicts_by_code"].keys())
-        # demo 模式阈值在真实录制上至少触发这俩
-        assert "PREFLIGHT_DOCK_TILT" in codes
-        assert "INFLIGHT_BATTERY_LOW" in codes
+        # 生产阈值下该 clean 录制不应触发起飞前/飞行中的严重 verdict
+        assert "PREFLIGHT_DOCK_TILT" not in codes
+        assert "INFLIGHT_BATTERY_LOW" not in codes
 
     def test_report_metrics_have_real_values(
         self, recording: pathlib.Path, tmp_path: pathlib.Path
