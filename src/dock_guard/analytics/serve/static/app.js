@@ -247,16 +247,16 @@ function safRtk(id, fs) {
   if (!g.length && !rk.length && !fx.length) { noData(id, "RTK/GNSS"); return null; }
   const c = echarts.init(document.getElementById(id));
   c.setOption({ ...safBase(), title: { text: "RTK/GNSS" },
-    legend: { data: ["卫星数", "RTK星数", "Fixed"], top: 12, right: 20 },
+    legend: { data: ["卫星数", "RTK星数", "固定解"], top: 12, right: 20 },
     yAxis: [
       { type: "value", name: "颗" },
-      { type: "value", name: "Fixed", min: 0, max: 1, interval: 1,
+      { type: "value", name: "固定解", min: 0, max: 1, interval: 1,
         axisLabel: { formatter: v => v === 1 ? "是" : (v === 0 ? "否" : "") } },
     ],
     series: [
       { name: "卫星数", type: "line", step: "end", showSymbol: false, connectNulls: false, data: g },
       { name: "RTK星数", type: "line", step: "end", showSymbol: false, connectNulls: false, data: rk },
-      { name: "Fixed", type: "line", step: "end", yAxisIndex: 1, showSymbol: false,
+      { name: "固定解", type: "line", step: "end", yAxisIndex: 1, showSymbol: false,
         connectNulls: false, areaStyle: {}, data: fx },
     ] });
   return c;
@@ -270,7 +270,7 @@ function safDrc(id, fs) {
   const pts = valid.map(s => [s.rel_ms, idx[String(s.drc_state)]]);
   const c = echarts.init(document.getElementById(id));
   c.setOption({ ...safBase(), title: { text: "DRC 状态" },
-    tooltip: { trigger: "axis", formatter: p => fmtT(p[0].value[0]) + " · " + labels[p[0].value[1]] },
+    tooltip: { trigger: "axis", formatter: p => fmtT(p[0].value[0]) + " · " + esc(labels[p[0].value[1]]) },
     yAxis: { type: "value", min: 0, max: Math.max(1, labels.length - 1), interval: 1,
              axisLabel: { formatter: v => labels[v] !== undefined ? labels[v] : "" } },
     series: [{ name: "DRC", type: "line", step: "end", showSymbol: false, connectNulls: false, data: pts }] });
