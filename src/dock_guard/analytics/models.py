@@ -12,7 +12,8 @@ from typing import Any
 # tests/replay/_helpers.py 仍返 v1 (薄壳裁掉 metrics + battery_samples).
 # v4 = Stage 6 + flight_samples 原频 (OSD ~0.5Hz) 采样 (纯添加, 老 reader 忽略).
 # v5 = Stage 6 Phase2 + hsi_samples (drc/up hsi_info_push 下视距离; 纯添加).
-SCHEMA_VERSION = 5
+# v6 = 海测 VPS 展示 + stick_samples (drc/down stick_control 控制输入; 纯添加).
+SCHEMA_VERSION = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +66,16 @@ class HsiSample:
 
 
 @dataclass(frozen=True, slots=True)
+class StickSample:
+    # drc/down stick_control 控制输入; 原始 364~1684, 1024=回中; 事件驱动, 缺字段 None.
+    rel_ms: int            # 距 started_at_ms 的相对毫秒
+    roll: int | None = None
+    pitch: int | None = None
+    yaw: int | None = None
+    throttle: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class FlightMetrics:
     peak_wind_gust_30s: float | None
     peak_wind_gust_30s_at_ms: int | None
@@ -99,6 +110,7 @@ class FlightReport:
     battery_samples: list[BatterySample]    # NEW v3 (Stage 5-F)
     flight_samples: list[FlightSample] = field(default_factory=list)  # NEW v4
     hsi_samples: list[HsiSample] = field(default_factory=list)        # NEW v5
+    stick_samples: list[StickSample] = field(default_factory=list)   # NEW v6
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -118,4 +130,5 @@ class FlightReport:
             "battery_samples": [asdict(s) for s in self.battery_samples],
             "flight_samples": [asdict(s) for s in self.flight_samples],
             "hsi_samples": [asdict(s) for s in self.hsi_samples],
+            "stick_samples": [asdict(s) for s in self.stick_samples],
         }
