@@ -111,3 +111,67 @@ def test_hsi_sample_fields_and_elevation(tmp_path: pathlib.Path) -> None:
 def test_hsi_keeps_invalid_sentinel(tmp_path: pathlib.Path) -> None:
     rep = collect(_make_recording(tmp_path, 15), _seed_config(tmp_path))
     assert any(s.down_distance_mm == 60000 for s in rep.hsi_samples)
+
+
+def test_around_distances_with_null_elements(tmp_path: pathlib.Path) -> None:
+    """Test that around_distances containing null/string elements are filtered out gracefully."""
+    rec = tmp_path / "rec"
+    rec.mkdir()
+    (rec / "topics").mkdir()
+    base = 1700000000000
+    frames = [{
+        "recv_ts_ms": base, "dji_ts_ms": base, "direction": "up",
+        "topic": "sys/product/TEST_DOCK_01/status", "payload": {"sub_type": 0},
+    }]
+    # Single frame with around_distances containing null and string
+    ts = base + 100
+    frames.append({
+        "recv_ts_ms": ts + 100, "dji_ts_ms": ts + 100, "direction": "up",
+        "topic": "thing/product/TEST_DRONE_01/osd",
+        "payload": {"data": {
+            "mode_code": 5, "height": 40.0, "elevation": 2.0,
+            "battery": {"capacity_percent": 100},
+        }, "timestamp": ts + 100},
+    })
+    frames.append({
+        "recv_ts_ms": ts + 150, "dji_ts_ms": ts + 150, "direction": "up",
+        "topic": "thing/product/TEST_DOCK_01/osd",
+        "payload": {"data": {
+            "wind_speed": 30,
+            "sub_device": {"device_sn": "TEST_DRONE_01"},
+        }, "timestamp": ts + 150},
+    })
+    # hsi_info_push with around_distances containing null and invalid types
+    frames.append({
+        "recv_ts_ms": ts + 200, "dji_ts_ms": ts + 200, "direction": "up",
+        "topic": "thing/product/TEST_DOCK_01/drc/up",
+        "payload": {"method": "hsi_info_push", "data": {
+            "down_distance": 1500, "down_enable": True, "down_work": True,
+            "up_distance": 60000, "up_enable": False, "up_work": True,
+            "around_distances": [3000, None, "invalid", 4000],
+        }},
+    })
+    with (rec / "topics" / "x.jsonl").open("w", encoding="utf-8") as f:
+        for fr in frames:
+            f.write(json.dumps(fr) + "\n")
+    (rec / "manifest.json").write_text(json.dumps({
+        "schema_version": 1, "dock_sn": "TEST_DOCK_01", "drone_sn": "TEST_DRONE_01",
+        "started_at_recv_ms": frames[0]["recv_ts_ms"],
+        "ended_at_recv_ms": frames[-1]["recv_ts_ms"],
+        "topics": [{
+            "topic": "synthetic", "device_sn": "TEST_DOCK_01", "direction": "up",
+            "count": len(frames),
+            "first_recv_ts_ms": frames[0]["recv_ts_ms"],
+            "last_recv_ts_ms": frames[-1]["recv_ts_ms"],
+            "files": [{"name": "topics/x.jsonl", "count": len(frames),
+                       "first_ms": frames[0]["recv_ts_ms"],
+                       "last_ms": frames[-1]["recv_ts_ms"]}],
+        }],
+    }), encoding="utf-8")
+
+    # collect() should not crash; invalid elements should be filtered
+    rep = collect(rec, _seed_config(tmp_path))
+    assert rep.hsi_samples, "should have hsi samples"
+    last = rep.hsi_samples[-1]
+    # Only 3000 and 4000 should remain (None and "invalid" filtered out)
+    assert last.around_distances_mm == [3000, 4000]

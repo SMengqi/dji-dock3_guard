@@ -90,7 +90,7 @@ def _make_long_recording(tmp_path: pathlib.Path, duration_s: int = 60) -> pathli
 
 
 class TestSchemaV3:
-    def test_schema_version_is_3(self) -> None:
+    def test_schema_version_is_5(self) -> None:
         assert SCHEMA_VERSION == 5
 
 

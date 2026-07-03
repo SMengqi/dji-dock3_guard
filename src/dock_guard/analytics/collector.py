@@ -187,7 +187,9 @@ async def _collect_async(
                     up_enable=_as_bool(data.get("up_enable")),
                     up_work=_as_bool(data.get("up_work")),
                     around_distances_mm=(
-                        [int(x) for x in around] if isinstance(around, list) else None
+                        [int(x) for x in around
+                         if isinstance(x, (int, float)) and not isinstance(x, bool)] or None
+                        if isinstance(around, list) else None
                     ),
                     elevation_m=(
                         float(elev) if isinstance(elev, (int, float))

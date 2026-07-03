@@ -176,7 +176,7 @@ async function renderSafety() {
     + ` · 时长: <b>${dur}</b> · 原频采样点: <b>${fs.length}</b>`;
   if (!fs.length) {
     document.getElementById("warn").textContent =
-      "该报告无原频飞行采样 (flight_samples 为空; 用 --force 重跑升 v4)。";
+      "该报告无原频飞行采样 (flight_samples 为空; 用 --force 重跑升 v5)。";
     return;
   }
   const charts = [
