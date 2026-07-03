@@ -11,7 +11,8 @@ from typing import Any
 # v3 = Stage 5-F + battery_samples 时序 (向后纯字段添加, 老 v2 reader 仍可读忽略字段)
 # tests/replay/_helpers.py 仍返 v1 (薄壳裁掉 metrics + battery_samples).
 # v4 = Stage 6 + flight_samples 原频 (OSD ~0.5Hz) 采样 (纯添加, 老 reader 忽略).
-SCHEMA_VERSION = 4
+# v5 = Stage 6 Phase2 + hsi_samples (drc/up hsi_info_push 下视距离; 纯添加).
+SCHEMA_VERSION = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +50,21 @@ class FlightSample:
 
 
 @dataclass(frozen=True, slots=True)
+class HsiSample:
+    """drc/up hsi_info_push 下视距离采样 (~1Hz). 除 rel_ms 全 nullable."""
+
+    rel_ms: int
+    down_distance_mm: int | None = None       # 原始 mm; >=60000 无效(NA)
+    down_enable: bool | None = None
+    down_work: bool | None = None
+    up_distance_mm: int | None = None
+    up_enable: bool | None = None
+    up_work: bool | None = None
+    around_distances_mm: list[int] | None = None
+    elevation_m: float | None = None          # 该时刻 facts.elevation 快照 (相对起飞点)
+
+
+@dataclass(frozen=True, slots=True)
 class FlightMetrics:
     peak_wind_gust_30s: float | None
     peak_wind_gust_30s_at_ms: int | None
@@ -82,6 +98,7 @@ class FlightReport:
     metrics: FlightMetrics
     battery_samples: list[BatterySample]    # NEW v3 (Stage 5-F)
     flight_samples: list[FlightSample] = field(default_factory=list)  # NEW v4
+    hsi_samples: list[HsiSample] = field(default_factory=list)        # NEW v5
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -100,4 +117,5 @@ class FlightReport:
             "metrics": asdict(self.metrics),
             "battery_samples": [asdict(s) for s in self.battery_samples],
             "flight_samples": [asdict(s) for s in self.flight_samples],
+            "hsi_samples": [asdict(s) for s in self.hsi_samples],
         }

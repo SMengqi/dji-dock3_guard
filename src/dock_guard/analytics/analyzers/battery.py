@@ -50,7 +50,7 @@ def load_v3_reports(parent: pathlib.Path) -> tuple[list[dict[str, Any]], int]:
             d = json.loads(rep_path.read_text(encoding="utf-8"))
         except Exception:
             continue
-        if d.get("schema_version") not in (3, 4):
+        if d.get("schema_version") not in (3, 4, 5):
             skipped_v2 += 1
             continue
         reports.append(d)

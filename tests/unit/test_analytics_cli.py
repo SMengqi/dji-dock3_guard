@@ -88,7 +88,7 @@ class TestSingleMode:
         rec = _make_recording(tmp_path / "rec_a")
         _run_cli(str(rec), "--config-dir", str(cfg))
         d = json.loads((rec / "dock_guard_report" / "report.json").read_text())
-        assert d["schema_version"] == 4
+        assert d["schema_version"] == 5
         assert d["dock_sn"] == "TEST_DOCK_01"
 
 

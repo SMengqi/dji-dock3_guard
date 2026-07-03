@@ -44,7 +44,7 @@ class TestE2E:
         cfg = _seed_config(tmp_path)
         rep = collect(recording, cfg)
         d = rep.to_dict()
-        assert d["schema_version"] == 4
+        assert d["schema_version"] == 5
         assert d["dock_sn"] == "8UUXN7N00A0GAA"
         codes = set(d["metrics"]["verdicts_by_code"].keys())
         # 生产阈值下该 clean 录制不应触发起飞前/飞行中的严重 verdict

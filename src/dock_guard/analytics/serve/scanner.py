@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-_SCHEMA_OK = frozenset({3, 4})
+_SCHEMA_OK = frozenset({3, 4, 5})
 _SUBPATH = ("dock_guard_report", "report.json")
 
 
@@ -42,7 +42,7 @@ def _summarize(recording: str, rp: Path) -> dict[str, Any]:
         return {
             "recording": recording,
             "ok": False,
-            "error": f"schema v{schema} 旧报告 (需 v3/v4)",
+            "error": f"schema v{schema} 旧报告 (需 v3/v4/v5)",
         }
     m = d.get("metrics", {})
     return {

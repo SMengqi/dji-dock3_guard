@@ -10,6 +10,7 @@ from dock_guard.analytics.models import (
     FlightMetrics,
     FlightReport,
     FlightSample,
+    HsiSample,
 )
 
 
@@ -33,10 +34,6 @@ def _report(flight_samples: list[FlightSample]) -> FlightReport:
     )
 
 
-def test_schema_version_is_4() -> None:
-    assert SCHEMA_VERSION == 4
-
-
 def test_to_dict_includes_flight_samples() -> None:
     rep = _report([FlightSample(
         rel_ms=0, height_m=1.5, vertical_speed_ms=-0.5, horizontal_speed_ms=3.0,
@@ -44,7 +41,7 @@ def test_to_dict_includes_flight_samples() -> None:
         gps_number=12, rtk_number=20, is_fixed=True, drc_state="connected",
     )])
     d = rep.to_dict()
-    assert d["schema_version"] == 4
+    assert d["schema_version"] == 5
     s0 = d["flight_samples"][0]
     assert s0["is_fixed"] is True and s0["drc_state"] == "connected"
     assert s0["gps_number"] == 12
@@ -54,7 +51,7 @@ def test_to_dict_includes_flight_samples() -> None:
 def test_from_dict_v4_roundtrip() -> None:
     rep = _report([FlightSample(rel_ms=10, height_m=2.0, drc_state="x")])
     rep2 = _from_dict(rep.to_dict())
-    assert rep2.schema_version == 4
+    assert rep2.schema_version == 5
     assert rep2.flight_samples[0].drc_state == "x"
     assert rep2.flight_samples[0].height_m == 2.0
 
@@ -76,3 +73,43 @@ def test_default_flight_samples_empty() -> None:
         alert_decisions=[], metrics=_metrics(), battery_samples=[],
     )
     assert rep.flight_samples == []
+
+
+def _report_hsi(hsi_samples: list[HsiSample]) -> FlightReport:
+    return FlightReport(
+        schema_version=SCHEMA_VERSION, recording="rec", dock_sn="D", drone_sn="A",
+        started_at_ms=0, ended_at_ms=1000, duration_ms=1000, total_envelopes=0,
+        envelope_counts_by_topic_key={}, phase_transitions=[], verdicts=[],
+        alert_decisions=[], metrics=_metrics(), battery_samples=[],
+        flight_samples=[], hsi_samples=hsi_samples,
+    )
+
+
+def test_schema_version_is_5() -> None:
+    assert SCHEMA_VERSION == 5
+
+
+def test_hsi_to_dict_and_roundtrip() -> None:
+    rep = _report_hsi([HsiSample(
+        rel_ms=0, down_distance_mm=1500, down_enable=True, down_work=True,
+        up_distance_mm=60000, up_enable=False, up_work=True,
+        around_distances_mm=[3200, 4100], elevation_m=1.2,
+    )])
+    d = rep.to_dict()
+    assert d["schema_version"] == 5
+    s0 = d["hsi_samples"][0]
+    assert s0["down_distance_mm"] == 1500 and s0["down_work"] is True
+    assert s0["around_distances_mm"] == [3200, 4100]
+    import json
+    json.dumps(d)
+    rep2 = _from_dict(d)
+    assert rep2.hsi_samples[0].elevation_m == 1.2
+    assert rep2.hsi_samples[0].up_enable is False
+
+
+def test_from_dict_v4_defaults_empty_hsi() -> None:
+    d = _report_hsi([]).to_dict()
+    d["schema_version"] = 4
+    d.pop("hsi_samples")
+    rep = _from_dict(d)
+    assert rep.hsi_samples == []
