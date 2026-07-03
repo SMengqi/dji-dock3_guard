@@ -308,6 +308,7 @@ class DockAggregator:
             ("mode_code", F.MODE_CODE),
             ("gear", F.GEAR),
             ("height", F.HEIGHT),
+            ("elevation", F.ELEVATION),
             ("vertical_speed", F.VERTICAL_SPEED),
             ("horizontal_speed", F.HORIZONTAL_SPEED),
             ("attitude_pitch", F.ATTITUDE_PITCH),

@@ -21,6 +21,7 @@ from dock_guard.analytics.models import (
     FlightMetrics,
     FlightReport,
     FlightSample,
+    HsiSample,
 )
 from dock_guard.config import load_app_config
 from dock_guard.coordinator import AlertCoordinator, NullAlertSink
@@ -39,6 +40,14 @@ def _facts_float(facts: Mapping[str, Any], key: str) -> float | None:
 def _facts_int(facts: Mapping[str, Any], key: str) -> int | None:
     v = facts.get(key)
     return int(v) if isinstance(v, int) and not isinstance(v, bool) else None
+
+
+def _as_int(v: Any) -> int | None:
+    return int(v) if isinstance(v, int) and not isinstance(v, bool) else None
+
+
+def _as_bool(v: Any) -> bool | None:
+    return v if isinstance(v, bool) else None
 
 
 def collect(
@@ -66,7 +75,7 @@ async def _collect_async(
 ) -> FlightReport:
     effective_env = env if env is not None else dict(os.environ)
     cfg = load_app_config(config_dir, env=effective_env)
-    src = ReplaySource(recording_dir, speed=0)
+    src = ReplaySource(recording_dir, speed=0, drop_drc=False)
 
     agg = DockAggregator(src.dock_sn, cfg)
     engine = RuleEngine(cfg.rules, agg) if cfg.rules is not None else None
@@ -90,6 +99,7 @@ async def _collect_async(
     # Stage 5-F: 10s 间隔的 battery_samples 时序
     battery_samples: list[BatterySample] = []
     flight_samples: list[FlightSample] = []
+    hsi_samples: list[HsiSample] = []
     next_sample_rel_ms = 0
     # 风向计数 (10s 一格 -> 秒数 = count * 10)
     wind_direction_counts: dict[str, int] = {}
@@ -159,6 +169,31 @@ async def _collect_async(
                 is_fixed=bool(fixed) if isinstance(fixed, bool) else None,
                 drc_state=str(drc) if drc is not None else None,
             ))
+
+        if (env.topic_key == TopicKey.DOCK_DRC_UP
+                and first_ts is not None
+                and isinstance(env.payload, dict)
+                and env.payload.get("method") == "hsi_info_push"):
+            data = env.payload.get("data")
+            if isinstance(data, dict):
+                elev = frame.facts.get("elevation") if frame is not None else None
+                around = data.get("around_distances")
+                hsi_samples.append(HsiSample(
+                    rel_ms=env.recv_ts_ms - first_ts,
+                    down_distance_mm=_as_int(data.get("down_distance")),
+                    down_enable=_as_bool(data.get("down_enable")),
+                    down_work=_as_bool(data.get("down_work")),
+                    up_distance_mm=_as_int(data.get("up_distance")),
+                    up_enable=_as_bool(data.get("up_enable")),
+                    up_work=_as_bool(data.get("up_work")),
+                    around_distances_mm=(
+                        [int(x) for x in around] if isinstance(around, list) else None
+                    ),
+                    elevation_m=(
+                        float(elev) if isinstance(elev, (int, float))
+                        and not isinstance(elev, bool) else None
+                    ),
+                ))
 
         for tr in agg.drain_phase_transitions():
             phase_transitions.append({
@@ -247,6 +282,7 @@ async def _collect_async(
         metrics=metrics,
         battery_samples=battery_samples,
         flight_samples=flight_samples,
+        hsi_samples=hsi_samples,
     )
 
 

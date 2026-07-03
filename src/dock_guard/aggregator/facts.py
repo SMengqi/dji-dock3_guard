@@ -37,6 +37,7 @@ class F:
     MODE_CODE = "mode_code"
     GEAR = "gear"
     HEIGHT = "height"
+    ELEVATION = "elevation"
     VERTICAL_SPEED = "vertical_speed"
     HORIZONTAL_SPEED = "horizontal_speed"
     ATTITUDE_PITCH = "attitude_pitch"
