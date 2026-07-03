@@ -15,7 +15,7 @@
     .charts-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      grid-template-rows: repeat(3, auto);
+      grid-template-rows: repeat(4, auto);
       grid-auto-flow: column;
       gap: 0 1.5rem;
       align-items: start;
@@ -32,10 +32,13 @@
   <div id="summary"></div>
   <div class="charts-grid">
     <div id="p-height" class="panel"></div>
+    <div id="p-downdist" class="panel"></div>
     <div id="p-speed" class="panel"></div>
     <div id="p-attitude" class="panel"></div>
     <div id="p-rtk" class="panel"></div>
     <div id="p-drc" class="panel"></div>
+    <div id="p-downstate" class="panel"></div>
+    <div id="p-around" class="panel"></div>
   </div>
   <script src="/static/echarts.min.js"></script>
   <script src="/static/app.js"></script>

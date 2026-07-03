@@ -84,3 +84,18 @@ def test_passthrough_includes_flight_samples(tmp_path: Path) -> None:
     c = TestClient(build_report_app(tmp_path))
     d = c.get("/api/reports/v4rec").json()
     assert d["flight_samples"][0]["drc_state"] == "x"
+
+
+def test_app_js_has_down_dist(tmp_path: Path) -> None:
+    c = _client(tmp_path)
+    assert "safDownDist" in c.get("/static/app.js").text
+
+
+def test_passthrough_includes_hsi_samples(tmp_path: Path) -> None:
+    write_sample_report(
+        tmp_path, "v5rec", schema=5,
+        hsi_samples=[{"rel_ms": 0, "down_distance_mm": 1500, "elevation_m": 1.0}],
+    )
+    c = TestClient(build_report_app(tmp_path))
+    d = c.get("/api/reports/v5rec").json()
+    assert d["hsi_samples"][0]["down_distance_mm"] == 1500

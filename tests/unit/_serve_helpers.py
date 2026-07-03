@@ -47,11 +47,15 @@ def _base_report(name: str, schema: int) -> dict[str, Any]:
 
 def write_sample_report(
     root: Path, name: str, *, schema: int = 3,
-    flight_samples: list[dict[str, Any]] | None = None, **overrides: Any
+    flight_samples: list[dict[str, Any]] | None = None,
+    hsi_samples: list[dict[str, Any]] | None = None,
+    **overrides: Any,
 ) -> None:
     d = _base_report(name, schema)
     if flight_samples is not None:
         d["flight_samples"] = flight_samples
+    if hsi_samples is not None:
+        d["hsi_samples"] = hsi_samples
     d.update(overrides)
     out = root / name / "dock_guard_report"
     out.mkdir(parents=True, exist_ok=True)

@@ -169,6 +169,7 @@ async function renderSafety() {
     return;
   }
   const fs = rep.flight_samples || [];
+  const hsi = rep.hsi_samples || [];
   const dur = rep.duration_ms != null ? (rep.duration_ms / 1000).toFixed(0) + "s" : "-";
   document.getElementById("summary").innerHTML =
     `机场 SN: <b>${esc(rep.dock_sn || "-")}</b> · 飞机 SN: <b>${esc(rep.drone_sn || "-")}</b>`
@@ -180,10 +181,13 @@ async function renderSafety() {
   }
   const charts = [
     safLine("p-height", "高度", "m", safPick(fs, "height_m")),
+    safDownDist("p-downdist", hsi),
     safSpeed("p-speed", fs),
     safAttitude("p-attitude", fs),
     safRtk("p-rtk", fs),
     safDrc("p-drc", fs),
+    safDownState("p-downstate", hsi),
+    safAround("p-around", hsi),
   ].filter(Boolean);
   charts.forEach(c => { c.group = "safety"; });
   echarts.connect("safety");
@@ -274,6 +278,62 @@ function safDrc(id, fs) {
     yAxis: { type: "value", min: 0, max: Math.max(1, labels.length - 1), interval: 1,
              axisLabel: { formatter: v => labels[v] !== undefined ? labels[v] : "" } },
     series: [{ name: "DRC", type: "line", step: "end", showSymbol: false, connectNulls: false, data: pts }] });
+  return c;
+}
+
+const _HSI_NA = 60000;  // down_distance >= 此值判无效
+
+function safDownDist(id, hsi) {
+  const raw = [], diff = [];
+  hsi.forEach(s => {
+    if (s.down_distance_mm == null || s.down_distance_mm >= _HSI_NA) return;
+    const dm = s.down_distance_mm / 1000;
+    raw.push([s.rel_ms, dm]);
+    if (s.elevation_m != null) diff.push([s.rel_ms, dm - s.elevation_m]);
+  });
+  if (!raw.length && !diff.length) { noData(id, "下视距离"); return null; }
+  const c = echarts.init(document.getElementById(id));
+  c.setOption({ ...safBase(), title: { text: "下视距离 vs 相对高度" },
+    legend: { data: ["下视距离", "差值(下视−相对高度)"], top: 12, right: 20 },
+    yAxis: { type: "value", name: "m" },
+    series: [
+      { name: "下视距离", type: "line", showSymbol: false, connectNulls: false, data: raw },
+      { name: "差值(下视−相对高度)", type: "line", showSymbol: false, connectNulls: false, data: diff },
+    ] });
+  return c;
+}
+
+function safDownState(id, hsi) {
+  const work = hsi.filter(s => s.down_work != null).map(s => [s.rel_ms, s.down_work ? 1 : 0]);
+  const na = hsi.map(s => [s.rel_ms, (s.down_distance_mm == null || s.down_distance_mm >= _HSI_NA) ? 1 : 0]);
+  if (!work.length && !na.length) { noData(id, "下视状态"); return null; }
+  const c = echarts.init(document.getElementById(id));
+  c.setOption({ ...safBase(), title: { text: "下视工作 / 失效状态" },
+    legend: { data: ["下视工作", "下视失效(无效距离)"], top: 12, right: 20 },
+    yAxis: { type: "value", min: 0, max: 1, interval: 1,
+             axisLabel: { formatter: v => v === 1 ? "是" : "否" } },
+    series: [
+      { name: "下视工作", type: "line", step: "end", showSymbol: false, connectNulls: false, data: work },
+      { name: "下视失效(无效距离)", type: "line", step: "end", showSymbol: false,
+        connectNulls: false, areaStyle: {}, data: na },
+    ] });
+  return c;
+}
+
+function safAround(id, hsi) {
+  const up = hsi.filter(s => s.up_distance_mm != null && s.up_distance_mm < _HSI_NA)
+    .map(s => [s.rel_ms, s.up_distance_mm / 1000]);
+  const around = hsi.filter(s => Array.isArray(s.around_distances_mm) && s.around_distances_mm.length)
+    .map(s => [s.rel_ms, Math.min(...s.around_distances_mm) / 1000]);
+  if (!up.length && !around.length) { noData(id, "上/周向距离"); return null; }
+  const c = echarts.init(document.getElementById(id));
+  c.setOption({ ...safBase(), title: { text: "上视 / 周向最近距离" },
+    legend: { data: ["上视距离", "周向最近"], top: 12, right: 20 },
+    yAxis: { type: "value", name: "m", min: 0 },
+    series: [
+      { name: "上视距离", type: "line", showSymbol: false, connectNulls: false, data: up },
+      { name: "周向最近", type: "line", showSymbol: false, connectNulls: false, data: around },
+    ] });
   return c;
 }
 
