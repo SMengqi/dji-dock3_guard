@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 
 from dock_guard.analytics.__main__ import _from_dict
 from dock_guard.analytics.models import (
@@ -113,3 +114,19 @@ def test_from_dict_v4_defaults_empty_hsi() -> None:
     d.pop("hsi_samples")
     rep = _from_dict(d)
     assert rep.hsi_samples == []
+
+
+def test_flight_sample_has_lat_lon_defaults_none():
+    s = FlightSample(rel_ms=0)
+    assert s.latitude is None and s.longitude is None
+
+
+def test_flight_sample_roundtrip_lat_lon():
+    s = FlightSample(rel_ms=100, latitude=29.9235956, longitude=121.6634755)
+    d = asdict(s)
+    assert d["latitude"] == 29.9235956 and d["longitude"] == 121.6634755
+    assert FlightSample(**d) == s
+
+
+def test_schema_version_still_6_after_lat_lon():
+    assert SCHEMA_VERSION == 6

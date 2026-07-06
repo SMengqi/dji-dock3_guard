@@ -43,6 +43,13 @@ def _facts_int(facts: Mapping[str, Any], key: str) -> int | None:
     return int(v) if isinstance(v, int) and not isinstance(v, bool) else None
 
 
+def _osd_float(osd: Any, key: str) -> float | None:
+    if not isinstance(osd, Mapping):
+        return None
+    v = osd.get(key)
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
 def _as_int(v: Any) -> int | None:
     return int(v) if isinstance(v, int) and not isinstance(v, bool) else None
 
@@ -158,6 +165,7 @@ async def _collect_async(
             f = frame.facts
             fixed = f.get("rtk_fixed")
             drc = f.get("drc_state")
+            osd = env.payload.get("data") if isinstance(env.payload, dict) else None
             flight_samples.append(FlightSample(
                 rel_ms=env.recv_ts_ms - first_ts,
                 height_m=_facts_float(f, "height"),
@@ -170,6 +178,8 @@ async def _collect_async(
                 rtk_number=_facts_int(f, "rtk_number"),
                 is_fixed=bool(fixed) if isinstance(fixed, bool) else None,
                 drc_state=str(drc) if drc is not None else None,
+                latitude=_osd_float(osd, "latitude"),
+                longitude=_osd_float(osd, "longitude"),
             ))
 
         if (env.topic_key == TopicKey.DOCK_DRC_UP

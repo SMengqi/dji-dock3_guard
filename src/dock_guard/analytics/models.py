@@ -48,6 +48,8 @@ class FlightSample:
     rtk_number: int | None = None
     is_fixed: bool | None = None
     drc_state: str | None = None
+    latitude: float | None = None       # WGS84 小数度, 原始值 (安全视图水平漂移)
+    longitude: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
