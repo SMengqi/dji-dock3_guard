@@ -171,6 +171,7 @@ async function renderSafety() {
   const fs = rep.flight_samples || [];
   const hsi = rep.hsi_samples || [];
   const stick = rep.stick_samples || [];
+  const link = rep.link_samples || [];
   const dur = rep.duration_ms != null ? (rep.duration_ms / 1000).toFixed(0) + "s" : "-";
   document.getElementById("summary").innerHTML =
     `机场 SN: <b>${esc(rep.dock_sn || "-")}</b> · 飞机 SN: <b>${esc(rep.drone_sn || "-")}</b>`
@@ -191,6 +192,7 @@ async function renderSafety() {
     safDownState("p-downstate", hsi),
     safAround("p-around", hsi),
     safDrift("p-drift", fs),
+    safLink("p-link", link),
   ].filter(Boolean);
   charts.forEach(c => { c.group = "safety"; });
   echarts.connect("safety");
@@ -383,6 +385,21 @@ function safDrift(id, fs) {
     series: [
       { name: "东向", type: "line", showSymbol: false, connectNulls: false, data: east },
       { name: "北向", type: "line", showSymbol: false, connectNulls: false, data: north },
+    ] });
+  return c;
+}
+
+function safLink(id, link) {
+  const sdr = link.filter(s => s.sdr_quality != null).map(s => [s.rel_ms, s.sdr_quality]);
+  const fg = link.filter(s => s.fourg_quality != null).map(s => [s.rel_ms, s.fourg_quality]);
+  if (!sdr.length && !fg.length) { noData(id, "链路质量"); return null; }
+  const c = echarts.init(document.getElementById(id));
+  c.setOption({ ...safBase(), title: { text: "链路质量 (SDR/4G, 0-5)" },
+    legend: { data: ["SDR质量", "4G质量"], top: 12, right: 20 },
+    yAxis: { type: "value", name: "质量", min: 0, max: 5 },
+    series: [
+      { name: "SDR质量", type: "line", step: "end", showSymbol: false, connectNulls: false, data: sdr },
+      { name: "4G质量", type: "line", step: "end", showSymbol: false, connectNulls: false, data: fg },
     ] });
   return c;
 }
