@@ -13,6 +13,7 @@ from typing import Any
 # v4 = Stage 6 + flight_samples 原频 (OSD ~0.5Hz) 采样 (纯添加, 老 reader 忽略).
 # v5 = Stage 6 Phase2 + hsi_samples (drc/up hsi_info_push 下视距离; 纯添加).
 # v6 = 海测 VPS 展示 + stick_samples (drc/down stick_control 控制输入; 纯添加).
+# (v6 内纯添加) FlightSample 加 latitude/longitude (drone OSD 直读; 不升 schema, 水平漂移).
 SCHEMA_VERSION = 6
 
 
