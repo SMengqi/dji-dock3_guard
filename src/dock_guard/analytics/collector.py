@@ -22,6 +22,7 @@ from dock_guard.analytics.models import (
     FlightReport,
     FlightSample,
     HsiSample,
+    StickSample,
 )
 from dock_guard.config import load_app_config
 from dock_guard.coordinator import AlertCoordinator, NullAlertSink
@@ -100,6 +101,7 @@ async def _collect_async(
     battery_samples: list[BatterySample] = []
     flight_samples: list[FlightSample] = []
     hsi_samples: list[HsiSample] = []
+    stick_samples: list[StickSample] = []
     next_sample_rel_ms = 0
     # 风向计数 (10s 一格 -> 秒数 = count * 10)
     wind_direction_counts: dict[str, int] = {}
@@ -197,6 +199,20 @@ async def _collect_async(
                     ),
                 ))
 
+        if (env.topic_key == TopicKey.DOCK_DRC_DOWN
+                and first_ts is not None
+                and isinstance(env.payload, dict)
+                and env.payload.get("method") == "stick_control"):
+            data = env.payload.get("data")
+            if isinstance(data, dict):
+                stick_samples.append(StickSample(
+                    rel_ms=env.recv_ts_ms - first_ts,
+                    roll=_as_int(data.get("roll")),
+                    pitch=_as_int(data.get("pitch")),
+                    yaw=_as_int(data.get("yaw")),
+                    throttle=_as_int(data.get("throttle")),
+                ))
+
         for tr in agg.drain_phase_transitions():
             phase_transitions.append({
                 "ts_ms": tr.ts_ms,
@@ -285,6 +301,7 @@ async def _collect_async(
         battery_samples=battery_samples,
         flight_samples=flight_samples,
         hsi_samples=hsi_samples,
+        stick_samples=stick_samples,
     )
 
 
