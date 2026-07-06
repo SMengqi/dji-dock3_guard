@@ -211,15 +211,6 @@ function safBase() {
   };
 }
 
-function safLine(id, title, unit, pts) {
-  if (!pts.length) { noData(id, title); return null; }
-  const c = echarts.init(document.getElementById(id));
-  c.setOption({ ...safBase(), title: { text: title },
-    yAxis: { type: "value", name: unit },
-    series: [{ name: title, type: "line", showSymbol: false, connectNulls: false, data: pts }] });
-  return c;
-}
-
 function safHeight(id, fs, transfers) {
   const pts = safPick(fs, "height_m");
   if (!pts.length) { noData(id, "高度"); return null; }
