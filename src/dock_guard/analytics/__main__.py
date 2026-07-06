@@ -201,6 +201,7 @@ def _from_dict(d: dict) -> FlightReport:
         hsi_samples=[HsiSample(**s) for s in d.get("hsi_samples", [])],
         stick_samples=[StickSample(**s) for s in d.get("stick_samples", [])],
         link_samples=[LinkSample(**s) for s in d.get("link_samples", [])],
+        transfer_events=list(d.get("transfer_events", [])),
     )
 
 

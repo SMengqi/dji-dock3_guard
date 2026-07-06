@@ -124,6 +124,7 @@ class FlightReport:
     hsi_samples: list[HsiSample] = field(default_factory=list)        # NEW v5
     stick_samples: list[StickSample] = field(default_factory=list)   # NEW v6
     link_samples: list[LinkSample] = field(default_factory=list)     # NEW v7
+    transfer_events: list[dict] = field(default_factory=list)        # NEW (pure-add, 不升 schema)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -145,4 +146,5 @@ class FlightReport:
             "hsi_samples": [asdict(s) for s in self.hsi_samples],
             "stick_samples": [asdict(s) for s in self.stick_samples],
             "link_samples": [asdict(s) for s in self.link_samples],
+            "transfer_events": [dict(e) for e in self.transfer_events],
         }

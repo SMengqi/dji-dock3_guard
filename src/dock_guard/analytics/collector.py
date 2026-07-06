@@ -111,6 +111,7 @@ async def _collect_async(
     hsi_samples: list[HsiSample] = []
     stick_samples: list[StickSample] = []
     link_samples: list[LinkSample] = []
+    transfer_events: list[dict] = []
     next_sample_rel_ms = 0
     # 风向计数 (10s 一格 -> 秒数 = count * 10)
     wind_direction_counts: dict[str, int] = {}
@@ -237,6 +238,29 @@ async def _collect_async(
                     fourg_quality=_as_int(wl.get("4g_quality")),
                 ))
 
+        if (env.topic_key == TopicKey.DOCK_SERVICES
+                and first_ts is not None
+                and isinstance(env.payload, dict)):
+            method = env.payload.get("method")
+            data = env.payload.get("data")
+            if method in ("fly_to_point", "takeoff_to_point") and isinstance(data, dict):
+                if method == "fly_to_point":
+                    pts = data.get("points")
+                    th = (pts[-1].get("height")
+                          if isinstance(pts, list) and pts and isinstance(pts[-1], dict)
+                          else None)
+                    ttype = "fly_to"
+                else:
+                    th = data.get("target_height")
+                    ttype = "takeoff"
+                transfer_events.append({
+                    "rel_ms": env.recv_ts_ms - first_ts,
+                    "type": ttype,
+                    "target_height": (float(th)
+                                      if isinstance(th, (int, float)) and not isinstance(th, bool)
+                                      else None),
+                })
+
         for tr in agg.drain_phase_transitions():
             phase_transitions.append({
                 "ts_ms": tr.ts_ms,
@@ -327,6 +351,7 @@ async def _collect_async(
         hsi_samples=hsi_samples,
         stick_samples=stick_samples,
         link_samples=link_samples,
+        transfer_events=transfer_events,
     )
 
 
