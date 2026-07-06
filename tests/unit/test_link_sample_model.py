@@ -4,7 +4,7 @@ from dock_guard.analytics.models import (
     SCHEMA_VERSION,
     FlightMetrics,
     FlightReport,
-    StickSample,
+    LinkSample,
 )
 
 
@@ -14,7 +14,7 @@ def _bare_report(**kw):
         min_battery_percent=None, min_battery_percent_at_ms=None,
         longest_offline_ms=0, flight_duration_ms=0,
         total_verdicts=0, total_dispatched=0, total_suppressed=0,
-        verdicts_by_code={},
+        verdicts_by_code={}, wind_direction_seconds={},
     )
     base = dict(
         schema_version=SCHEMA_VERSION, recording="x", dock_sn="D", drone_sn=None,
@@ -30,30 +30,22 @@ def test_schema_version_is_7():
     assert SCHEMA_VERSION == 7
 
 
-def test_stick_sample_roundtrip():
-    s = StickSample(rel_ms=1200, roll=1354, pitch=1024, yaw=364, throttle=1024)
-    assert asdict(s) == {
-        "rel_ms": 1200, "roll": 1354, "pitch": 1024, "yaw": 364, "throttle": 1024,
-    }
+def test_link_sample_roundtrip():
+    s = LinkSample(rel_ms=500, sdr_quality=5, fourg_quality=0)
+    assert asdict(s) == {"rel_ms": 500, "sdr_quality": 5, "fourg_quality": 0}
 
 
-def test_stick_sample_missing_axis_is_none():
-    s = StickSample(rel_ms=0, roll=None, pitch=1024, yaw=None, throttle=None)
-    assert s.roll is None and s.yaw is None and s.throttle is None
+def test_link_sample_missing_none():
+    s = LinkSample(rel_ms=0)
+    assert s.sdr_quality is None and s.fourg_quality is None
 
 
-def test_report_to_dict_includes_stick_samples():
-    rep = _bare_report(stick_samples=[
-        StickSample(rel_ms=5, roll=1024, pitch=1024, yaw=1024, throttle=1024),
-    ])
+def test_report_to_dict_includes_link_samples():
+    rep = _bare_report(link_samples=[LinkSample(rel_ms=5, sdr_quality=3, fourg_quality=2)])
     d = rep.to_dict()
     assert d["schema_version"] == 7
-    assert d["stick_samples"] == [
-        {"rel_ms": 5, "roll": 1024, "pitch": 1024, "yaw": 1024, "throttle": 1024},
-    ]
+    assert d["link_samples"] == [{"rel_ms": 5, "sdr_quality": 3, "fourg_quality": 2}]
 
 
-def test_report_stick_samples_defaults_empty():
-    rep = _bare_report()
-    assert rep.stick_samples == []
-    assert rep.to_dict()["stick_samples"] == []
+def test_report_link_samples_defaults_empty():
+    assert _bare_report().link_samples == []

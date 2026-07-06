@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-_SCHEMA_OK = frozenset({3, 4, 5, 6})
+_SCHEMA_OK = frozenset({3, 4, 5, 6, 7})
 _SUBPATH = ("dock_guard_report", "report.json")
 
 

@@ -42,7 +42,7 @@ def test_to_dict_includes_flight_samples() -> None:
         gps_number=12, rtk_number=20, is_fixed=True, drc_state="connected",
     )])
     d = rep.to_dict()
-    assert d["schema_version"] == 6
+    assert d["schema_version"] == 7
     s0 = d["flight_samples"][0]
     assert s0["is_fixed"] is True and s0["drc_state"] == "connected"
     assert s0["gps_number"] == 12
@@ -52,7 +52,7 @@ def test_to_dict_includes_flight_samples() -> None:
 def test_from_dict_v4_roundtrip() -> None:
     rep = _report([FlightSample(rel_ms=10, height_m=2.0, drc_state="x")])
     rep2 = _from_dict(rep.to_dict())
-    assert rep2.schema_version == 6
+    assert rep2.schema_version == 7
     assert rep2.flight_samples[0].drc_state == "x"
     assert rep2.flight_samples[0].height_m == 2.0
 
@@ -86,8 +86,8 @@ def _report_hsi(hsi_samples: list[HsiSample]) -> FlightReport:
     )
 
 
-def test_schema_version_is_6() -> None:
-    assert SCHEMA_VERSION == 6
+def test_schema_version_is_7() -> None:
+    assert SCHEMA_VERSION == 7
 
 
 def test_hsi_to_dict_and_roundtrip() -> None:
@@ -97,7 +97,7 @@ def test_hsi_to_dict_and_roundtrip() -> None:
         around_distances_mm=[3200, 4100], elevation_m=1.2,
     )])
     d = rep.to_dict()
-    assert d["schema_version"] == 6
+    assert d["schema_version"] == 7
     s0 = d["hsi_samples"][0]
     assert s0["down_distance_mm"] == 1500 and s0["down_work"] is True
     assert s0["around_distances_mm"] == [3200, 4100]
@@ -128,5 +128,5 @@ def test_flight_sample_roundtrip_lat_lon():
     assert FlightSample(**d) == s
 
 
-def test_schema_version_still_6_after_lat_lon():
-    assert SCHEMA_VERSION == 6
+def test_schema_version_still_7_after_lat_lon():
+    assert SCHEMA_VERSION == 7

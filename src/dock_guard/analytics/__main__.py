@@ -26,6 +26,7 @@ from dock_guard.analytics.models import (
     FlightReport,
     FlightSample,
     HsiSample,
+    LinkSample,
     StickSample,
 )
 from dock_guard.analytics.report import (
@@ -177,9 +178,9 @@ def _process_batch(
 def _from_dict(d: dict) -> FlightReport:
     """反序列化已有 report.json. v2 旧 schema 抛友好错误, 引导 --force 升级."""
     schema = d.get("schema_version", 0)
-    if schema not in (3, 4, 5, 6):
+    if schema not in (3, 4, 5, 6, 7):
         raise ValueError(
-            f"v{schema} schema 旧报告 (当前 v6); 用 --force 重跑升级"
+            f"v{schema} schema 旧报告 (当前 v7); 用 --force 重跑升级"
         )
     return FlightReport(
         schema_version=d["schema_version"],
@@ -199,6 +200,7 @@ def _from_dict(d: dict) -> FlightReport:
         flight_samples=[FlightSample(**s) for s in d.get("flight_samples", [])],
         hsi_samples=[HsiSample(**s) for s in d.get("hsi_samples", [])],
         stick_samples=[StickSample(**s) for s in d.get("stick_samples", [])],
+        link_samples=[LinkSample(**s) for s in d.get("link_samples", [])],
     )
 
 

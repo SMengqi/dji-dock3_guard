@@ -14,7 +14,8 @@ from typing import Any
 # v5 = Stage 6 Phase2 + hsi_samples (drc/up hsi_info_push 下视距离; 纯添加).
 # v6 = 海测 VPS 展示 + stick_samples (drc/down stick_control 控制输入; 纯添加).
 # (v6 内纯添加) FlightSample 加 latitude/longitude (drone OSD 直读; 不升 schema, 水平漂移).
-SCHEMA_VERSION = 6
+# v7 = 海测 VPS 展示 + link_samples (drc/up drc_geo_connect_info_push 链路质量; 纯添加).
+SCHEMA_VERSION = 7
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +80,14 @@ class StickSample:
 
 
 @dataclass(frozen=True, slots=True)
+class LinkSample:
+    # drc/up drc_geo_connect_info_push 链路质量; 事件驱动, 缺字段 None.
+    rel_ms: int
+    sdr_quality: int | None = None      # 图传链路质量 0-5
+    fourg_quality: int | None = None    # 4G 链路质量 0-5 (JSON 键 "4g_quality")
+
+
+@dataclass(frozen=True, slots=True)
 class FlightMetrics:
     peak_wind_gust_30s: float | None
     peak_wind_gust_30s_at_ms: int | None
@@ -114,6 +123,7 @@ class FlightReport:
     flight_samples: list[FlightSample] = field(default_factory=list)  # NEW v4
     hsi_samples: list[HsiSample] = field(default_factory=list)        # NEW v5
     stick_samples: list[StickSample] = field(default_factory=list)   # NEW v6
+    link_samples: list[LinkSample] = field(default_factory=list)     # NEW v7
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -134,4 +144,5 @@ class FlightReport:
             "flight_samples": [asdict(s) for s in self.flight_samples],
             "hsi_samples": [asdict(s) for s in self.hsi_samples],
             "stick_samples": [asdict(s) for s in self.stick_samples],
+            "link_samples": [asdict(s) for s in self.link_samples],
         }
