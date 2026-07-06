@@ -170,6 +170,7 @@ async function renderSafety() {
   }
   const fs = rep.flight_samples || [];
   const hsi = rep.hsi_samples || [];
+  const stick = rep.stick_samples || [];
   const dur = rep.duration_ms != null ? (rep.duration_ms / 1000).toFixed(0) + "s" : "-";
   document.getElementById("summary").innerHTML =
     `机场 SN: <b>${esc(rep.dock_sn || "-")}</b> · 飞机 SN: <b>${esc(rep.drone_sn || "-")}</b>`
@@ -184,6 +185,7 @@ async function renderSafety() {
     safDownDist("p-downdist", hsi),
     safSpeed("p-speed", fs),
     safAttitude("p-attitude", fs),
+    safStick("p-stick", stick),
     safRtk("p-rtk", fs),
     safDrc("p-drc", fs),
     safDownState("p-downstate", hsi),
@@ -241,6 +243,27 @@ function safAttitude(id, fs) {
       { name: "俯仰", type: "line", showSymbol: false, connectNulls: false, data: p },
       { name: "横滚", type: "line", showSymbol: false, connectNulls: false, data: r },
       { name: "航向", type: "line", showSymbol: false, connectNulls: false, data: hd },
+    ] });
+  return c;
+}
+
+function safStick(id, stick) {
+  // 归一化: (v-1024)/660 -> [-1,+1], 夹住溢出; 1024=回中.
+  const norm = key => stick
+    .filter(s => s[key] != null)
+    .map(s => [s.rel_ms, Math.max(-1, Math.min(1, (s[key] - 1024) / 660))]);
+  const rl = norm("roll"), pt = norm("pitch"), yw = norm("yaw"), th = norm("throttle");
+  if (!rl.length && !pt.length && !yw.length && !th.length) { noData(id, "控制输入"); return null; }
+  const c = echarts.init(document.getElementById(id));
+  c.setOption({ ...safBase(), title: { text: "控制输入 (归一化 -1~+1, 0=回中)" },
+    legend: { data: ["横滚", "俯仰", "偏航", "油门"], top: 12, right: 20 },
+    yAxis: { type: "value", name: "杆量", min: -1, max: 1 },
+    series: [
+      { name: "横滚", type: "line", step: "end", showSymbol: false, connectNulls: true, data: rl,
+        markLine: { silent: true, symbol: "none", data: [{ yAxis: 0 }] } },
+      { name: "俯仰", type: "line", step: "end", showSymbol: false, connectNulls: true, data: pt },
+      { name: "偏航", type: "line", step: "end", showSymbol: false, connectNulls: true, data: yw },
+      { name: "油门", type: "line", step: "end", showSymbol: false, connectNulls: true, data: th },
     ] });
   return c;
 }
