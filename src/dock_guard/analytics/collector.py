@@ -22,6 +22,7 @@ from dock_guard.analytics.models import (
     FlightReport,
     FlightSample,
     HsiSample,
+    LinkSample,
     StickSample,
 )
 from dock_guard.config import load_app_config
@@ -109,6 +110,7 @@ async def _collect_async(
     flight_samples: list[FlightSample] = []
     hsi_samples: list[HsiSample] = []
     stick_samples: list[StickSample] = []
+    link_samples: list[LinkSample] = []
     next_sample_rel_ms = 0
     # 风向计数 (10s 一格 -> 秒数 = count * 10)
     wind_direction_counts: dict[str, int] = {}
@@ -223,6 +225,18 @@ async def _collect_async(
                     throttle=_as_int(data.get("throttle")),
                 ))
 
+        if (env.topic_key == TopicKey.DOCK_DRC_UP
+                and first_ts is not None
+                and isinstance(env.payload, dict)
+                and env.payload.get("method") == "drc_geo_connect_info_push"):
+            wl = (env.payload.get("data") or {}).get("wireless_link")
+            if isinstance(wl, dict):
+                link_samples.append(LinkSample(
+                    rel_ms=env.recv_ts_ms - first_ts,
+                    sdr_quality=_as_int(wl.get("sdr_quality")),
+                    fourg_quality=_as_int(wl.get("4g_quality")),
+                ))
+
         for tr in agg.drain_phase_transitions():
             phase_transitions.append({
                 "ts_ms": tr.ts_ms,
@@ -312,6 +326,7 @@ async def _collect_async(
         flight_samples=flight_samples,
         hsi_samples=hsi_samples,
         stick_samples=stick_samples,
+        link_samples=link_samples,
     )
 
 
