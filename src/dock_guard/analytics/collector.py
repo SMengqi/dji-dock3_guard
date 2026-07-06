@@ -112,6 +112,7 @@ async def _collect_async(
     stick_samples: list[StickSample] = []
     link_samples: list[LinkSample] = []
     transfer_events: list[dict] = []
+    hms_events: list[dict] = []
     next_sample_rel_ms = 0
     # 风向计数 (10s 一格 -> 秒数 = count * 10)
     wind_direction_counts: dict[str, int] = {}
@@ -261,6 +262,28 @@ async def _collect_async(
                                       else None),
                 })
 
+        if (env.topic_key in (TopicKey.DRONE_EVENTS, TopicKey.DOCK_EVENTS)
+                and first_ts is not None
+                and isinstance(env.payload, dict)
+                and env.payload.get("method") == "hms"):
+            data = env.payload.get("data")
+            alist = data.get("list") if isinstance(data, dict) else None
+            if isinstance(alist, list):
+                device = "drone" if env.topic_key == TopicKey.DRONE_EVENTS else "dock"
+                rel = env.recv_ts_ms - first_ts
+                for item in alist:
+                    if not isinstance(item, dict):
+                        continue
+                    lvl = _as_int(item.get("level"))
+                    mod = _as_int(item.get("module"))
+                    hms_events.append({
+                        "rel_ms": rel,
+                        "code": str(item.get("code", "")),
+                        "level": lvl if lvl is not None else -1,
+                        "module": mod if mod is not None else -1,
+                        "device": device,
+                    })
+
         for tr in agg.drain_phase_transitions():
             phase_transitions.append({
                 "ts_ms": tr.ts_ms,
@@ -352,6 +375,7 @@ async def _collect_async(
         stick_samples=stick_samples,
         link_samples=link_samples,
         transfer_events=transfer_events,
+        hms_events=hms_events,
     )
 
 
