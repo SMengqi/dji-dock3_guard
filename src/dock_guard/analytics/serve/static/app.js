@@ -190,6 +190,7 @@ async function renderSafety() {
     safDrc("p-drc", fs),
     safDownState("p-downstate", hsi),
     safAround("p-around", hsi),
+    safDrift("p-drift", fs),
   ].filter(Boolean);
   charts.forEach(c => { c.group = "safety"; });
   echarts.connect("safety");
@@ -356,6 +357,32 @@ function safAround(id, hsi) {
     series: [
       { name: "上视距离", type: "line", showSymbol: false, connectNulls: false, data: up },
       { name: "周向最近", type: "line", showSymbol: false, connectNulls: false, data: around },
+    ] });
+  return c;
+}
+
+function safDrift(id, fs) {
+  // 相对起点东/北位移(米). 原点 = 第一个 lat/lon 双非空点.
+  const R = 111320;
+  let lat0 = null, lon0 = null;
+  for (const s of fs) {
+    if (s.latitude != null && s.longitude != null) { lat0 = s.latitude; lon0 = s.longitude; break; }
+  }
+  if (lat0 == null) { noData(id, "水平漂移"); return null; }
+  const k = Math.cos(lat0 * Math.PI / 180);
+  const east = [], north = [];
+  for (const s of fs) {
+    if (s.latitude == null || s.longitude == null) continue;
+    east.push([s.rel_ms, (s.longitude - lon0) * R * k]);
+    north.push([s.rel_ms, (s.latitude - lat0) * R]);
+  }
+  const c = echarts.init(document.getElementById(id));
+  c.setOption({ ...safBase(), title: { text: "水平漂移 (相对起点 东/北 位移)" },
+    legend: { data: ["东向", "北向"], top: 12, right: 20 },
+    yAxis: { type: "value", name: "米" },
+    series: [
+      { name: "东向", type: "line", showSymbol: false, connectNulls: false, data: east },
+      { name: "北向", type: "line", showSymbol: false, connectNulls: false, data: north },
     ] });
   return c;
 }
