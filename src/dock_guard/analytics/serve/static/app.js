@@ -172,6 +172,7 @@ async function renderSafety() {
   const hsi = rep.hsi_samples || [];
   const stick = rep.stick_samples || [];
   const link = rep.link_samples || [];
+  const hms = rep.hms_events || [];
   const dur = rep.duration_ms != null ? (rep.duration_ms / 1000).toFixed(0) + "s" : "-";
   document.getElementById("summary").innerHTML =
     `机场 SN: <b>${esc(rep.dock_sn || "-")}</b> · 飞机 SN: <b>${esc(rep.drone_sn || "-")}</b>`
@@ -193,6 +194,7 @@ async function renderSafety() {
     safAround("p-around", hsi),
     safDrift("p-drift", fs),
     safLink("p-link", link),
+    safHms("p-hms", hms),
   ].filter(Boolean);
   charts.forEach(c => { c.group = "safety"; });
   echarts.connect("safety");
@@ -412,6 +414,32 @@ function safLink(id, link) {
       { name: "SDR质量", type: "line", step: "end", showSymbol: false, connectNulls: false, data: sdr },
       { name: "4G质量", type: "line", step: "end", showSymbol: false, connectNulls: false, data: fg },
     ] });
+  return c;
+}
+
+function safHms(id, hms) {
+  if (!hms.length) { noData(id, "HMS 告警"); return null; }
+  const LV = ["通知", "提醒", "警告"];
+  const COLOR = ["#27ae60", "#e67e22", "#c0392b"];
+  const MOD = { 0: "飞行任务", 1: "设备管理", 2: "媒体", 3: "hms" };
+  const series = [0, 1, 2].map(lv => ({
+    name: LV[lv], type: "scatter", symbolSize: 9, itemStyle: { color: COLOR[lv] },
+    data: hms.filter(h => h.level === lv).map(h => ({
+      value: [h.rel_ms, lv], code: h.code, module: h.module, device: h.device,
+    })),
+  }));
+  const c = echarts.init(document.getElementById(id));
+  c.setOption({ ...safBase(),
+    title: { text: "HMS 告警 (点=告警时刻, 纵轴等级)" },
+    tooltip: { trigger: "item", formatter: p =>
+      fmtT(p.value[0]) + "<br>" + LV[p.value[1]]
+      + " · " + (p.data.device === "dock" ? "机场" : "机端")
+      + "<br>code: " + p.data.code
+      + " · 模块: " + (MOD[p.data.module] ?? p.data.module) },
+    legend: { data: LV, top: 12, right: 20 },
+    yAxis: { type: "value", name: "等级", min: 0, max: 2, interval: 1,
+      axisLabel: { formatter: v => LV[v] || "" } },
+    series });
   return c;
 }
 
