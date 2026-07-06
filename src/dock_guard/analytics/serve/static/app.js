@@ -256,14 +256,14 @@ function safStick(id, stick) {
   if (!rl.length && !pt.length && !yw.length && !th.length) { noData(id, "控制输入"); return null; }
   const c = echarts.init(document.getElementById(id));
   c.setOption({ ...safBase(), title: { text: "控制输入 (归一化 -1~+1, 0=回中)" },
-    legend: { data: ["横滚", "俯仰", "偏航", "油门"], top: 12, right: 20 },
+    legend: { data: ["横移", "前后", "转向", "升降"], top: 12, right: 20 },
     yAxis: { type: "value", name: "杆量", min: -1, max: 1 },
     series: [
-      { name: "横滚", type: "line", step: "end", showSymbol: false, connectNulls: true, data: rl,
+      { name: "横移", type: "line", step: "end", showSymbol: false, connectNulls: true, data: rl,
         markLine: { silent: true, symbol: "none", data: [{ yAxis: 0 }] } },
-      { name: "俯仰", type: "line", step: "end", showSymbol: false, connectNulls: true, data: pt },
-      { name: "偏航", type: "line", step: "end", showSymbol: false, connectNulls: true, data: yw },
-      { name: "油门", type: "line", step: "end", showSymbol: false, connectNulls: true, data: th },
+      { name: "前后", type: "line", step: "end", showSymbol: false, connectNulls: true, data: pt },
+      { name: "转向", type: "line", step: "end", showSymbol: false, connectNulls: true, data: yw },
+      { name: "升降", type: "line", step: "end", showSymbol: false, connectNulls: true, data: th },
     ] });
   return c;
 }
