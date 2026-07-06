@@ -182,7 +182,7 @@ async function renderSafety() {
     return;
   }
   const charts = [
-    safLine("p-height", "高度", "m", safPick(fs, "height_m")),
+    safHeight("p-height", fs, rep.transfer_events || []),
     safDownDist("p-downdist", hsi),
     safSpeed("p-speed", fs),
     safAttitude("p-attitude", fs),
@@ -217,6 +217,26 @@ function safLine(id, title, unit, pts) {
   c.setOption({ ...safBase(), title: { text: title },
     yAxis: { type: "value", name: unit },
     series: [{ name: title, type: "line", showSymbol: false, connectNulls: false, data: pts }] });
+  return c;
+}
+
+function safHeight(id, fs, transfers) {
+  const pts = safPick(fs, "height_m");
+  if (!pts.length) { noData(id, "高度"); return null; }
+  const c = echarts.init(document.getElementById(id));
+  const marks = transfers.map(t => ({
+    xAxis: t.rel_ms,
+    label: {
+      formatter: (t.type === "takeoff" ? "起飞转场" : "转场")
+        + (t.target_height != null ? " " + t.target_height.toFixed(0) + "m" : ""),
+      color: "#c0392b", fontSize: 10,
+    },
+    lineStyle: { color: "#c0392b", type: "dashed" },
+  }));
+  c.setOption({ ...safBase(), title: { text: "高度 (转场竖线标注命令高度)" },
+    yAxis: { type: "value", name: "m" },
+    series: [{ name: "高度", type: "line", showSymbol: false, connectNulls: false, data: pts,
+      markLine: marks.length ? { silent: true, symbol: "none", data: marks } : undefined }] });
   return c;
 }
 
