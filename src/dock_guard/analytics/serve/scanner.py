@@ -1,7 +1,7 @@
 """扫 reports_root → 报告摘要清单 + 路径安全解析 (只读).
 
 磁盘布局: <reports_root>/<recording>/dock_guard_report/report.json
-report.json = analytics.models.FlightReport.to_dict() (schema v3/v4/v5).
+report.json = analytics.models.FlightReport.to_dict() (schema v3/v4/v5/v6/v7).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ _SUBPATH = ("dock_guard_report", "report.json")
 def scan_reports(reports_root: Path) -> list[dict[str, Any]]:
     """扫全部 <root>/*/dock_guard_report/report.json → 摘要清单 (按名排序).
 
-    损坏 / 非 v3/v4/v5/v6 的报告标 {"ok": False, "error": ...}, 不抛.
+    损坏 / 非 v3/v4/v5/v6/v7 的报告标 {"ok": False, "error": ...}, 不抛.
     """
     rows: list[dict[str, Any]] = []
     if not reports_root.is_dir():
@@ -42,7 +42,7 @@ def _summarize(recording: str, rp: Path) -> dict[str, Any]:
         return {
             "recording": recording,
             "ok": False,
-            "error": f"schema v{schema} 旧报告 (需 v3/v4/v5/v6)",
+            "error": f"schema v{schema} 旧报告 (需 v3/v4/v5/v6/v7)",
         }
     m = d.get("metrics", {})
     return {
