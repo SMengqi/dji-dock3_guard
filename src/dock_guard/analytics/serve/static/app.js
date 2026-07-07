@@ -417,6 +417,13 @@ function safLink(id, link) {
   return c;
 }
 
+function hmsText(device, code) {
+  const M = window.HMS_TEXT || {};
+  const cl = "0x" + String(code).replace(/^0x/i, "").toLowerCase();
+  const pre = device === "dock" ? "dock_tip_" : "fpv_tip_";
+  return M[pre + cl] || M[pre + cl + "_in_the_sky"] || null;
+}
+
 function safHms(id, hms) {
   if (!hms.length) { noData(id, "HMS 告警"); return null; }
   const LV = ["通知", "提醒", "警告"];
@@ -431,11 +438,14 @@ function safHms(id, hms) {
   const c = echarts.init(document.getElementById(id));
   c.setOption({ ...safBase(),
     title: { text: "HMS 告警 (点=告警时刻, 纵轴等级)" },
-    tooltip: { trigger: "item", formatter: p =>
-      fmtT(p.value[0]) + "<br>" + LV[p.value[1]]
-      + " · " + (p.data.device === "dock" ? "机场" : "机端")
-      + "<br>code: " + esc(p.data.code)
-      + " · 模块: " + (MOD[p.data.module] ?? p.data.module) },
+    tooltip: { trigger: "item", formatter: p => {
+      const txt = hmsText(p.data.device, p.data.code);
+      return fmtT(p.value[0]) + "<br>" + LV[p.value[1]]
+        + " · " + (p.data.device === "dock" ? "机场" : "机端")
+        + "<br>code: " + esc(p.data.code)
+        + " · 模块: " + (MOD[p.data.module] ?? p.data.module)
+        + (txt ? "<br>文案: " + esc(txt) : "");
+    } },
     legend: { data: LV, top: 12, right: 20 },
     yAxis: { type: "value", name: "等级", min: 0, max: 2, interval: 1,
       axisLabel: { formatter: v => LV[v] || "" } },
