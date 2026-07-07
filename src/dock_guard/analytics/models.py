@@ -52,6 +52,9 @@ class FlightSample:
     drc_state: str | None = None
     latitude: float | None = None       # WGS84 小数度, 原始值 (安全视图水平漂移)
     longitude: float | None = None
+    oa_down: int | None = None          # obstacle_avoidance.downside 0/1 (避障方向)
+    oa_horizon: int | None = None       # .horizon
+    oa_up: int | None = None            # .upside
 
 
 @dataclass(frozen=True, slots=True)

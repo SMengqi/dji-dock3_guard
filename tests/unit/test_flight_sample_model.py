@@ -130,3 +130,19 @@ def test_flight_sample_roundtrip_lat_lon():
 
 def test_schema_version_still_7_after_lat_lon():
     assert SCHEMA_VERSION == 7
+
+
+def test_flight_sample_oa_defaults_none():
+    s = FlightSample(rel_ms=0)
+    assert s.oa_down is None and s.oa_horizon is None and s.oa_up is None
+
+
+def test_flight_sample_roundtrip_oa():
+    s = FlightSample(rel_ms=10, oa_down=1, oa_horizon=1, oa_up=0)
+    d = asdict(s)
+    assert d["oa_down"] == 1 and d["oa_horizon"] == 1 and d["oa_up"] == 0
+    assert FlightSample(**d) == s
+
+
+def test_schema_version_still_7_after_oa():
+    assert SCHEMA_VERSION == 7

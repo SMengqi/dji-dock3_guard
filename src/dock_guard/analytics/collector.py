@@ -51,6 +51,14 @@ def _osd_float(osd: Any, key: str) -> float | None:
     return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
 
 
+def _oa_int(osd: Any, key: str) -> int | None:
+    oa = osd.get("obstacle_avoidance") if isinstance(osd, Mapping) else None
+    if not isinstance(oa, Mapping):
+        return None
+    v = oa.get(key)
+    return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
 def _as_int(v: Any) -> int | None:
     return int(v) if isinstance(v, int) and not isinstance(v, bool) else None
 
@@ -184,6 +192,9 @@ async def _collect_async(
                 drc_state=str(drc) if drc is not None else None,
                 latitude=_osd_float(osd, "latitude"),
                 longitude=_osd_float(osd, "longitude"),
+                oa_down=_oa_int(osd, "downside"),
+                oa_horizon=_oa_int(osd, "horizon"),
+                oa_up=_oa_int(osd, "upside"),
             ))
 
         if (env.topic_key == TopicKey.DOCK_DRC_UP
