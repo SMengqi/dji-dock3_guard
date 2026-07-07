@@ -195,6 +195,7 @@ async function renderSafety() {
     safDrift("p-drift", fs),
     safLink("p-link", link),
     safHms("p-hms", hms),
+    safOa("p-oa", fs),
   ].filter(Boolean);
   charts.forEach(c => { c.group = "safety"; });
   echarts.connect("safety");
@@ -450,6 +451,22 @@ function safHms(id, hms) {
     yAxis: { type: "value", name: "等级", min: 0, max: 2, interval: 1,
       axisLabel: { formatter: v => LV[v] || "" } },
     series });
+  return c;
+}
+
+function safOa(id, fs) {
+  const dn = safPick(fs, "oa_down"), hz = safPick(fs, "oa_horizon"), up = safPick(fs, "oa_up");
+  if (!dn.length && !hz.length && !up.length) { noData(id, "避障方向"); return null; }
+  const c = echarts.init(document.getElementById(id));
+  c.setOption({ ...safBase(), title: { text: "避障方向 (1=开 0=关)" },
+    legend: { data: ["下视", "水平", "上视"], top: 12, right: 20 },
+    yAxis: { type: "value", name: "使能", min: 0, max: 1, interval: 1,
+      axisLabel: { formatter: v => v === 1 ? "开" : (v === 0 ? "关" : "") } },
+    series: [
+      { name: "下视", type: "line", step: "end", showSymbol: false, connectNulls: false, data: dn },
+      { name: "水平", type: "line", step: "end", showSymbol: false, connectNulls: false, data: hz },
+      { name: "上视", type: "line", step: "end", showSymbol: false, connectNulls: false, data: up },
+    ] });
   return c;
 }
 

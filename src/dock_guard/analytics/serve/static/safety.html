@@ -11,11 +11,11 @@
     #summary { margin: 1rem 0; color: #444; }
     .panel { width: 100%; height: 220px; margin: .4rem 0; }
     .nodata { color: #999; padding: 1rem 0; }
-    /* 两栏 (列优先): 左栏 高度·下视距离·速度·姿态·控制输入·链路质量, 右栏 RTK·DRC·下视状态·周围距离·水平漂移·HMS告警 */
+    /* 两栏 (列优先): 左栏 高度·下视距离·速度·姿态·控制输入·链路质量·RTK, 右栏 DRC·下视状态·周围距离·水平漂移·HMS告警·避障方向 */
     .charts-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      grid-template-rows: repeat(6, auto);
+      grid-template-rows: repeat(7, auto);
       grid-auto-flow: column;
       gap: 0 1.5rem;
       align-items: start;
@@ -43,6 +43,7 @@
     <div id="p-around" class="panel"></div>
     <div id="p-drift" class="panel"></div>
     <div id="p-hms" class="panel"></div>
+    <div id="p-oa" class="panel"></div>
   </div>
   <script src="/static/echarts.min.js"></script>
   <script src="/static/hms_codes.js"></script>
