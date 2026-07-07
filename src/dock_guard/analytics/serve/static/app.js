@@ -434,7 +434,7 @@ function safHms(id, hms) {
     tooltip: { trigger: "item", formatter: p =>
       fmtT(p.value[0]) + "<br>" + LV[p.value[1]]
       + " · " + (p.data.device === "dock" ? "机场" : "机端")
-      + "<br>code: " + p.data.code
+      + "<br>code: " + esc(p.data.code)
       + " · 模块: " + (MOD[p.data.module] ?? p.data.module) },
     legend: { data: LV, top: 12, right: 20 },
     yAxis: { type: "value", name: "等级", min: 0, max: 2, interval: 1,
