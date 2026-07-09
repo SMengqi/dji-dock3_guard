@@ -420,9 +420,10 @@ function safLink(id, link) {
 
 function hmsText(device, code) {
   const M = window.HMS_TEXT || {};
+  const E = window.HMS_TEXT_EXTRA || {};
   const cl = "0x" + String(code).replace(/^0x/i, "").toLowerCase();
   const pre = device === "dock" ? "dock_tip_" : "fpv_tip_";
-  return M[pre + cl] || M[pre + cl + "_in_the_sky"] || null;
+  return M[pre + cl] || M[pre + cl + "_in_the_sky"] || E[cl] || null;
 }
 
 function safHms(id, hms) {
